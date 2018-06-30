@@ -58,6 +58,8 @@ class DBParser :
         'STRING',
         'LCURBRACK',
         'RCURBRACK',
+        'LPARENTHESIS',
+        'RPARENTHESIS',
         'SEMICOLON',
         'COLON',
         'COMMA',
@@ -80,6 +82,8 @@ class DBParser :
     # Regular expression rules for simple tokens
     t_LCURBRACK  = r'\{'
     t_RCURBRACK  = r'\}'
+    t_LPARENTHESIS = r'\('
+    t_RPARENTHESIS = r'\)'
     t_SEMICOLON  = r';'
     t_COLON      = r':'
     t_COMMA      = r','
@@ -209,12 +213,17 @@ class DBParser :
         p[0] = p[1]
 
     def p_action (self, p):
-        '''action : NONE
-                  | WARNING
+        '''action : NONE LPARENTHESIS default RPARENTHESIS
+                  | WARNING LPARENTHESIS default RPARENTHESIS
                   | ERROR
                   | default'''
 
-        p[0] = p[1]
+        if len (p) == 5:
+            p[0] = dbstructs.DBAction (p[1], p[3])
+        elif p[1]=='Error':             # in case of error, no default is required
+            p[0] = dbstructs.DBAction (p[1])
+        else:                           # default is a shortcut for 'None (default)'
+            p[0] = dbstructs.DBAction ('None', p[1])
 
     def p_default (self, p):
         '''default : NUMBER

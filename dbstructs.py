@@ -170,6 +170,46 @@ def get_cellname (index, startrow, nbrows):
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
+# DBAction
+#
+# Definition of actions
+# -----------------------------------------------------------------------------
+class DBAction:
+    """
+    Definition of actions
+    """
+
+    def __init__ (self, action, default=None):
+
+        '''an action consists of either ignoring (None), warning or issuing an
+error. Additionally, in the first two cases, default values shall be specified
+
+        '''
+
+        self._action, self._default = action, default
+
+    def __str__ (self):
+        '''provides a human readable representation of the contents of this intance'''
+
+        # in case of an error, no default is needed
+        if self._action == "Error":
+            return self._action
+
+        # otherwise return both the action and the default value
+        return "{0} with default value: {1}".format (self._action, self._default)
+        
+    def get_action (self):
+        '''return the action specified in this instance'''
+
+        return self._action
+
+    def get_default (self):
+        '''return the default value of this action'''
+
+        return self._default
+
+    
+# -----------------------------------------------------------------------------
 # DBRange
 #
 # Definition of a simple range of cells which provides an iterator
@@ -399,7 +439,53 @@ class DBColumn:
         output = str ()                         # initialize the output string
         return "\t Name  : {0}\n\t Range : {1}\n\t Type  : {2}\n\t Action: {3}".format (self._name, self._ranges, self._type, self._action)
 
+
+    def _handle_action (self, message=''):
+        '''applies the corresponding action and returns the default value according to
+           the action specified in this column. In case of an Error or a
+           Warning, a message is issued using the given string in message
+
+        '''
         
+        # apply the action specified in this instance
+        if self._action.get_action () == 'Error':       # in case of error
+
+            # issue a message and exit
+            print (" Error - {0}".format (message))
+            sys.exit (0)
+
+        elif self._action.get_action () == 'Warning':          # in case of warning
+
+            # show a warning message and use the default value defined for this
+            # column
+            print (" Warning - {0}".format (message))
+            data =  self._action.get_default ()
+
+        # if it is neither an error mpr a warning, silently copy the default
+        # value defined in the action of this column
+        data = self._action.get_default ()
+
+        # before returning ensure that the default value can be casted into the
+        # type specified for this column
+        try:
+                
+            # now, cast the default value as specified in this instance
+            if self._type == 'integer':
+                data = int (data)
+            elif self._type == 'real':
+                data = float (data)
+            elif self._type == 'text':
+                data = str (data)
+
+        except:
+
+            # if it was not possible then exit with an error
+            print (" Fatal Error - It was not possible to cast the default value '{0}' defined for column '{1}' to the type '{2}'".format (data, self._name, self._type))
+            sys.exit (0)
+
+        # finally, return the default value as computed here
+        return data
+
     def get_name (self):
         '''returns the name of this column'''
 
@@ -469,24 +555,30 @@ class DBColumn:
             # in case there is no data in this cell
             if data == '':
 
-                # apply the action specified in this instance
-                if self._action == 'Error':              # in case of error
-                    print (" Error - No data was found in cell '{0}' in database '{1}::{2}'".format (cell, spsname, sheetname))
-                    sys.exit (0)
+                # then apply the action specified in this column and retrieve
+                # the default value to use
+                data = self._handle_action ("No data was found in cell '{0}' in database '{1}::{2}'".format (cell, spsname, sheetname))
 
-                elif self._action == 'Warning':          # in case of warning
-                    print (" Warning - No data was found in cell '{0}' in database '{1}::{2}'".format (cell, spsname, sheetname))
+            # if a value is found in this cell but ...
+            else:
 
-                elif self._action != 'None':            # if it is neither an error, warning
-                    data = self._action                 # or none, then it is a default value
+                # it is not possible to cast it to the type specified for this
+                # column
+                try:
+                
+                    # now, cast data as specified in this instance
+                    if self._type == 'integer':
+                        data = int (data)
+                    elif self._type == 'real':
+                        data = float (data)
+                    elif self._type == 'text':
+                        data = str (data)
 
-            # now, cast data as specified in this instance
-            if self._type == 'integer':
-                data = int (data)
-            elif self._type == 'real':
-                data = float (data)
-            elif self._type == 'text':
-                data = str (data)
+                except:
+
+                    # then apply the action specified in this column as well and
+                    # retrieve the default value
+                    data = self._handle_action ("It was not possible to cast the value '{0}' found in cell {1} in database '{2}::{3}' to the type {4}".format (data, cell, spsname, sheetname, self._type))
 
             # and add this data to the result
             self._data.append(data)
