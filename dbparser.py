@@ -44,6 +44,7 @@ class DBParser :
 
     # reserved words
     reserved_words = {
+        'using'     : 'USING',
         'integer'   : 'INTEGER',
         'real'      : 'REAL',
         'text'      : 'TEXT',
@@ -164,9 +165,20 @@ class DBParser :
     # definition of data tables
     # -----------------------------------------------------------------------------
     def p_table (self, p):
-        '''table : ID LCURBRACK columns RCURBRACK'''
+        '''table : ID LCURBRACK columns RCURBRACK
+                 | ID USING STRING LCURBRACK columns RCURBRACK
+                 | ID USING STRING COLON STRING LCURBRACK columns RCURBRACK'''
 
-        p[0] = dbstructs.DBTable (p[1], p[3])
+        if len (p) == 5:
+            p[0] = dbstructs.DBTable (p[1], None, None, p[3])
+        elif len (p) == 7:
+
+            # remove the double quotes in the spreadsheet name
+            p[0] = dbstructs.DBTable (p[1], p[3][1:-1], None, p[5])
+        else:
+
+            # remove the double quotes in the spreadsheet name and the sheetname
+            p[0] = dbstructs.DBTable (p[1], p[3][1:-1], p[5][1:-1], p[7])
         
     def p_columns (self, p):
         '''columns : column

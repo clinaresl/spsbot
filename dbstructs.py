@@ -597,19 +597,24 @@ class DBTable:
     Provides the definition of a database table
     """
 
-    def __init__ (self, name, columns):
+    def __init__ (self, name, spreadsheet, sheetname, columns):
         '''initializes a database table with the given name and information from all the
-        given columns, which shall be instances of DBColumn
+        given columns, which shall be instances of DBColumn reading data from
+        the given sheetname in the specified spreadsheet
 
         '''
 
+        # copy the attributes
         self._name, self._columns = name, columns
+        self._spreadsheet, self._sheetname = spreadsheet, sheetname
 
     def __str__ (self):
         '''provides a human-readable description of the contents of this database'''
 
         output = str ()                         # initialize the output string
-        output += " Name: {0}\n\n".format (self._name)
+        output += " Name: {0}\n".format (self._name)
+        output += " Spreadsheet: {0}\n".format (self.get_spreadsheet ())
+        output += " Sheet name : {0}\n\n".format (self.get_sheetname ())
         for column in self._columns:
             output += "{0}\n\n".format (column)
 
@@ -630,6 +635,20 @@ class DBTable:
         '''returns the name of this table'''
 
         return self._name
+
+    def get_spreadsheet (self):
+        '''returns the name of the spreadsheet used to read data from'''
+
+        if not self._spreadsheet:
+            return "user defined"
+        return self._spreadsheet
+
+    def get_sheetname (self):
+        '''returns the sheet name used to read data from'''
+
+        if not self._sheetname:
+            return "first one (default)"
+        return self._sheetname
     
     def lookup (self, spsname, sheetname=None):
         '''looks up the given spreadsheet. If a sheetname is given, then it access that
@@ -682,11 +701,22 @@ class DBTable:
         # and now, create the table
         cursor.execute (cmdline)
 
-    def insert (self, cursor, spsname, sheetname=None):
+    def insert (self, cursor, spsname, sheetname=None, override=False):
         '''insert the data of this table in a sqlite3 database through the given sqlite3
-           cursor. Data is retrieved from the given spreadsheet. If a sheetname
-           is given, then it access that specified sheet; otherwisses, it uses
-           the first one
+           cursor. Data is retrieved from the given spreadsheet and sheetname
+           which are computed as follows:
+
+           If a spreadsheet name is given, then the specified spreadsheet is
+           used provided that none appears in the configuration file, unless
+           override is True, i.e., the configuration file has precedence unless
+           override is True.
+
+           If a sheetname is given, then the specified sheetname is accessed
+           provided that none appears in the configuration file, unless override
+           is True. If none is specified, the first sheet found in the
+           spreadsheet is used, i.e., the configuration file has precedence
+           unless override is True; if none is given anywhere, the first sheet
+           found in the spreadsheet is used by default.
 
         '''
 
@@ -695,6 +725,24 @@ class DBTable:
         specline = "?, " * (len (self._columns) - 1)
         cmdline = "INSERT INTO %s VALUES (%s)" % (self._name, specline + '?')
 
+        # compute the right spreadsheet and sheetnames to use.
+
+        # if override is given, then the values specified shall be used
+        if not override:
+
+            # If a spreadsheet name or a sheet name were given during the creation
+            # of the table in the configuration, use those; otherwise use the
+            # specified parameters
+            spsname   = self._spreadsheet if self._spreadsheet else spsname
+            sheetname = self._sheetname   if self._sheetname else sheetname
+
+        # it might happen here that no spreadsheet has been found,
+        if not spsname:
+            print (" Fatal Error - no spreadsheet has been given")
+            sys.exit (0)
+
+        print (" Reading data from spreadsheet '{0}'".format (spsname))
+            
         # retrieve now data from the spreadsheet (and/or the given sheetname)
         data = self.lookup (spsname, sheetname)
 
@@ -793,11 +841,22 @@ class DBDatabase:
         self._conn.commit ()                    # commit all changes
         self._conn.close ()                     # close the database
             
-    def insert (self, dbname, spsname, sheetname=None):
+    def insert (self, dbname, spsname, sheetname=None, override=False):
         '''inserts data from the given spreadsheet into the sqlite3 database named
            'databasename' according to the schema of all tables in this
-           instance. If a sheetname is given, then it access that specified
-           sheet; otherwisses, it uses the first one
+           instance.
+
+           If a spreadsheet name is given, then the specified spreadsheet is
+           used provided that none appears in the configuration file, unless
+           override is True, i.e., the configuration file has precedence unless
+           override is True.
+
+           If a sheetname is given, then the specified sheetname is accessed
+           provided that none appears in the configuration file, unless override
+           is True. If none is specified, the first sheet found in the
+           spreadsheet is used, i.e., the configuration file has precedence
+           unless override is True; if none is given anywhere, the first sheet
+           found in the spreadsheet is used by default.
 
         '''
 
@@ -810,7 +869,7 @@ class DBDatabase:
         for table in self._tables:              # for all tables
 
             # insert data into this table
-            table.insert (self._cursor, spsname, sheetname) 
+            table.insert (self._cursor, spsname, sheetname, override) 
 
         # close the database
         self._conn.commit ()                    # commit all changes

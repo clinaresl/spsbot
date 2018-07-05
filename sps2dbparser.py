@@ -90,10 +90,6 @@ class Sps2DBParser (object):
 
         # Group of mandatory arguments
         self._mandatory = self._parser.add_argument_group ("Mandatory arguments", "The following arguments are required")
-        self._mandatory.add_argument ('-s', '--spreadsheet',
-                                      type=str,
-                                      required=True,
-                                      help="provides the location of the spreadsheet to read")
         self._mandatory.add_argument ('-d', '--db',
                                       type=str,
                                       required=True,
@@ -105,9 +101,16 @@ class Sps2DBParser (object):
 
         # Group of optional arguments
         self._optional = self._parser.add_argument_group ('Optional', 'The following arguments are optional')
+        self._optional.add_argument ('-s', '--spreadsheet',
+                                     type=str,
+                                     help="provides the location of the spreadsheet to read. If not given, the spreadsheet specified in the configuration file is used unless --override is given")
         self._optional.add_argument ('-n', '--sheetname',
                                      type=str,
-                                     help="if given, data is retrieved from the specified sheet name; otherwise, the first sheet is used by default")
+                                     help="if given, data is retrieved from the specified sheet name. If not given, the spreadsheet specified in the configuration file is used unless --override is given; if none is given neither here nor in the configuration file, the first sheet found in the spreadsheet is used by default")
+        self._optional.add_argument ('-o', '--override',
+                                     default=False,
+                                     action='store_true',
+                                     help="if given, the spreadsheet and the sheetname specified with --spreadsheet and --sheetname are used even if others are found in the configuration file")
 
         # Group of miscellaneous arguments
         self._misc = self._parser.add_argument_group ('Miscellaneous')
