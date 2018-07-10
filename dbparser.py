@@ -194,7 +194,7 @@ class DBParser :
                   | ID rangelist type action SEMICOLON'''
 
         if len (p) == 5:
-            p[0] = dbstructs.DBColumn (p[1], p[2], p[3], 'None')
+            p[0] = dbstructs.DBColumn (p[1], p[2], p[3], dbstructs.DBAction ('None'))
         else:
             p[0] = dbstructs.DBColumn (p[1], p[2], p[3], p[4])
 
@@ -225,17 +225,29 @@ class DBParser :
         p[0] = p[1]
 
     def p_action (self, p):
-        '''action : NONE LPARENTHESIS default RPARENTHESIS
-                  | WARNING LPARENTHESIS default RPARENTHESIS
+        '''action : NONE
+                  | WARNING
                   | ERROR
-                  | default'''
+                  | default
+                  | NONE LPARENTHESIS default RPARENTHESIS
+                  | WARNING LPARENTHESIS default RPARENTHESIS'''
 
-        if len (p) == 5:
+        if len (p) == 2:
+
+            # if an action is given without a default value, then create it with
+            # "None" action
+            if p[1]=='None' or p[1]=='Warning' or p[1]=='Error':
+                p[0] = dbstructs.DBAction (p[1], None)
+            else:
+
+                # if only a default value is given, then consider the action to
+                # be "None"
+                p[0] = dbstructs.DBAction ('None', p[1])
+        else:
+
+            # if, on the other hand, an action is given with a default value,
+            # then create an action with both fields
             p[0] = dbstructs.DBAction (p[1], p[3])
-        elif p[1]=='Error':             # in case of error, no default is required
-            p[0] = dbstructs.DBAction (p[1])
-        else:                           # default is a shortcut for 'None (default)'
-            p[0] = dbstructs.DBAction ('None', p[1])
 
     def p_default (self, p):
         '''default : NUMBER

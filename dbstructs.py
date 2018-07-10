@@ -208,6 +208,55 @@ error. Additionally, in the first two cases, default values shall be specified
 
         return self._default
 
+    def handle_action (self, name, ctype, message=''):
+        '''applies this action to a column named "name" which is defined to store values
+           of the specified type. It returns the data to be used with the correct type
+
+        '''
+        
+        # apply the action specified in this instance
+        if self._action == 'Error':                             # in case of error
+
+            # issue a message and exit
+            print (" Error - {0}".format (message))
+            sys.exit (0)
+
+        elif self._action == 'Warning':                         # in case of warning
+
+            # show a warning message and use the default value defined for this
+            # column
+            print (" Warning - {0}".format (message))
+            data =  self._default
+
+        # if it is neither an error mpr a warning, silently copy the default
+        # value defined in the action of this column
+        data = self._default
+
+        # if the default value is None then just return that, otherwise cast the
+        # default value to the specified type
+        if self._default != None:
+        
+            # before returning ensure that the default value can be casted into the
+            # type specified for this column
+            try:
+                
+                # now, cast the default value as specified in this instance
+                if ctype == 'integer':
+                    data = int (data)
+                elif ctype == 'real':
+                    data = float (data)
+                elif ctype == 'text':
+                    data = str (data)
+
+            except:
+
+                # if it was not possible then exit with an error
+                print (" Fatal Error - It was not possible to cast the default value '{0}' defined for column '{1}' to the type '{2}'".format (data, name, ctype))
+                sys.exit (0)
+
+        # finally, return the default value as computed here
+        return data
+
     
 # -----------------------------------------------------------------------------
 # DBRange
@@ -440,52 +489,6 @@ class DBColumn:
         return "\t Name  : {0}\n\t Range : {1}\n\t Type  : {2}\n\t Action: {3}".format (self._name, self._ranges, self._type, self._action)
 
 
-    def _handle_action (self, message=''):
-        '''applies the corresponding action and returns the default value according to
-           the action specified in this column. In case of an Error or a
-           Warning, a message is issued using the given string in message
-
-        '''
-        
-        # apply the action specified in this instance
-        if self._action.get_action () == 'Error':       # in case of error
-
-            # issue a message and exit
-            print (" Error - {0}".format (message))
-            sys.exit (0)
-
-        elif self._action.get_action () == 'Warning':          # in case of warning
-
-            # show a warning message and use the default value defined for this
-            # column
-            print (" Warning - {0}".format (message))
-            data =  self._action.get_default ()
-
-        # if it is neither an error mpr a warning, silently copy the default
-        # value defined in the action of this column
-        data = self._action.get_default ()
-
-        # before returning ensure that the default value can be casted into the
-        # type specified for this column
-        try:
-                
-            # now, cast the default value as specified in this instance
-            if self._type == 'integer':
-                data = int (data)
-            elif self._type == 'real':
-                data = float (data)
-            elif self._type == 'text':
-                data = str (data)
-
-        except:
-
-            # if it was not possible then exit with an error
-            print (" Fatal Error - It was not possible to cast the default value '{0}' defined for column '{1}' to the type '{2}'".format (data, self._name, self._type))
-            sys.exit (0)
-
-        # finally, return the default value as computed here
-        return data
-
     def get_name (self):
         '''returns the name of this column'''
 
@@ -549,15 +552,23 @@ class DBColumn:
         for cell in self._ranges:
 
             # access the data
-            data = sheet [cell]
-            # print (" {0} [{1}]: {2}".format (spsname, cell, data))
+            try:
+
+                # enclose this look up in a try-except block because there might
+                # be any errors, including "Index out of range"
+                data = sheet [cell]
+
+            except:
+
+                # if an error is issued, then just simply consider there is no data
+                data = ''
 
             # in case there is no data in this cell
             if data == '':
 
                 # then apply the action specified in this column and retrieve
                 # the default value to use
-                data = self._handle_action ("No data was found in cell '{0}' in database '{1}::{2}'".format (cell, spsname, sheetname))
+                data = self._action.handle_action (self._name, self._type, "No data was found in cell '{0}' in database '{1}::{2}'".format (cell, spsname, sheetname))
 
             # if a value is found in this cell but ...
             else:
@@ -578,7 +589,7 @@ class DBColumn:
 
                     # then apply the action specified in this column as well and
                     # retrieve the default value
-                    data = self._handle_action ("It was not possible to cast the value '{0}' found in cell {1} in database '{2}::{3}' to the type {4}".format (data, cell, spsname, sheetname, self._type))
+                    data = self.handle_action (self._name, self._type, "It was not possible to cast the value '{0}' found in cell {1} in database '{2}::{3}' to the type {4}".format (data, cell, spsname, sheetname, self._type))
 
             # and add this data to the result
             self._data.append(data)
@@ -679,7 +690,12 @@ class DBTable:
             row = tuple ()                              # start with an empty tuple
             for column in self._columns:
                 row += (column._data[irow],)            # add this value
-            data.append (row)                           # and add this tuple
+
+            # make sure now no field in this row is "None". This can happen when
+            # a cell is empty and no default value was given in the database
+            # specification file. These have to be skipped
+            if None not in row:
+                data.append (row)                       # and add this tuple
 
         # and return all data retrieved from the spreadsheet in the form of a
         # list of tuples, ready to be inserted into the database
@@ -741,8 +757,6 @@ class DBTable:
             print (" Fatal Error - no spreadsheet has been given")
             sys.exit (0)
 
-        print (" Reading data from spreadsheet '{0}'".format (spsname))
-            
         # retrieve now data from the spreadsheet (and/or the given sheetname)
         data = self.lookup (spsname, sheetname)
 
