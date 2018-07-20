@@ -1,0 +1,13 @@
+test_table_1 using "examples/spsheets/alumnos-ene.ods":"Calificaciones" {
+	   practicas $O3 real Error;
+	   teoria    $P3 real Error;
+	   examen    $Q3 real Error;
+}
+
+test_table_2 using "examples/spsheets/alumnos-ene.ods":"Calificaciones" {
+	   nombre    $B3:$B66 text Error;
+	   apellidos $C3:$C66 text Error;
+	   practicas $O3:$O66 real Warning (0);
+	   teoria    $P3:$P66 real None (0);
+	   examen    $Q3:$Q66 real None (0);
+}

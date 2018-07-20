@@ -1,0 +1,32 @@
+# La primera hoja contiene información administrativa de los alumnos
+
+literal name
+	"Nombre"
+	
+literal surname
+	"Apellidos"
+
+query personal_data
+      "select * from admin_alumnos"
+
+{
+	$A1 literal.name;			# Nombre
+	$B1 literal.surname;			# Apellidos
+	$A2:$B2 down query.personal_data;
+}
+
+
+# La segunda hoja contiene las calificaciones de la evaluación continua
+literal theory
+	"Teoría"
+literal lab
+	"Prácticas"
+
+query continua
+      "select * from grades"
+
+{
+	$D1 literal.theory;			# Teoría
+	$E1 literal.lab;			# Prácticas
+	$D2:$E2 down query.continua;
+}

@@ -25,7 +25,8 @@ import sys                              # exit
 import ply.lex as lex
 import ply.yacc as yacc
 
-import dbstructs                        # supporting classes
+import structs
+import dbstructs
 
 # classes
 # -----------------------------------------------------------------------------
@@ -213,9 +214,9 @@ class DBParser :
 
         # return this range removing first the heading '$'
         if len (p) == 2:
-            p[0] = dbstructs.DBRange ([p[1][1:], p[1][1:]])
+            p[0] = structs.Range ([p[1][1:], p[1][1:]])
         else:
-            p[0] = dbstructs.DBRange ([p[1][1:], p[3][1:]])
+            p[0] = structs.Range ([p[1][1:], p[3][1:]])
             
     def p_type (self, p):
         '''type : INTEGER
