@@ -173,6 +173,9 @@ class SPSParser :
                        | declaration definitions
                        | spreadsheet definitions'''
 
+        # declarations are processed directly by the parser, so that parsing
+        # this grammar rule involves returning only information of the
+        # spreadsheets
         if isinstance (p[1], spsstructs.SPSSpreadsheet):
 
             if len (p) == 2:
@@ -181,7 +184,9 @@ class SPSParser :
                 p[0] = spsstructs.SPSDeck (p[1]) + p[2]
 
         else:
-            
+
+            # if the definition of spreadsheets is preceded of declarations,
+            # make sure to returning all spreadsheets coming hereafter
             if len (p) == 3:
                 p[0] = p[2]
                 
@@ -206,7 +211,7 @@ class SPSParser :
             print (" Fatal Error - Conflicting definitions for literal '{0}'".format (p[3]))
             sys.exit (0)
             
-        self._literal_table [p[2]] = p[3]
+        self._literal_table [p[2]] = p[3][1:-1]
 
     # likewise, the declaration of a query consists of the assignment of a query
     # to an identifier
@@ -274,7 +279,7 @@ class SPSParser :
         # literal or a query), and its value. If literal/query declarations were
         # used, they are substituted here
         if len (p) == 3:
-            p [0] = ('Literal', p[1])
+            p [0] = ('Literal', p[1][1:-1])
         if len (p) == 5:
 
             if p[1] == 'literal':

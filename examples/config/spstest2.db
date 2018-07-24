@@ -1,0 +1,19 @@
+# La primera hoja contiene información administrativa de los alumnos
+
+literal name
+	"Nombre"
+	
+literal surname
+	"Apellidos"
+
+query personal_data
+      "select * from admin_alumnos"
+
+{
+	$A1 literal.name;			# Nombre
+	$B1 literal.surname;			# Apellidos
+	$C1 "Teoria";
+	$D1 "Prácticas";
+	$A3 "Media";
+	$C3:$E3 right "Varianza";
+}

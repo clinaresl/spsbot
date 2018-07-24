@@ -28,8 +28,118 @@ Definition of all classes required to represent the information parsed from a sp
 __version__  = '1.0'
 
 
+# imports
+# -----------------------------------------------------------------------------
+import pyexcel
+import sqlite3
+
+import structs
+
 # classes
 # -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# DynamicArray
+#
+# Definition of a (pontentially) inifinite two-dimensional array
+# indexed by spreadsheet cells
+# -----------------------------------------------------------------------------
+class DynamicArray:
+    """Definition of a (pontentially) inifinite two-dimensional array
+       indexed by spreadsheet cells
+
+    """
+
+    def __init__ (self):
+
+        '''creates an empty two-dimensional array
+
+        '''
+
+        # initializes the private two-dimensional array
+        self._data = [[]]
+
+    def __getitem__ (self, key):
+        '''return the evaluation of self[key], where key is a cell name such
+as D4. First row is A, and first column is 1
+
+        '''
+
+        # process the key to get both the row and column
+        (col, row) = structs.get_columnrow (key)
+
+        # translate now the column into a unique integer identifier
+        # corresponding to its position (where 'A' is 0)
+        column = structs.get_columnindex (col)
+
+        # return the value at the given location provided that the key
+        # is within the range of this dynamic array
+        if row <= len (self._data):
+
+            if column < len (self._data [row-1]):
+
+                return self._data[row-1][column]
+
+            else:
+                raise IndexError
+
+        else:
+            raise IndexError
+
+    def __setitem__ (self, key, value):
+        '''set the value of the position corresponding to the given key with the specified content. If necessary, the two-dimensional array is extended to insert the new value
+        
+        '''
+
+        # process the key to get both the row and column
+        (col, row) = structs.get_columnrow (key)
+
+        # translate now the column into a unique integer identifier
+        # corresponding to its position (where 'A' is 0)
+        column = structs.get_columnindex (col)
+
+        # randomly access the specified row
+        if row <= len (self._data):
+
+            # and also randomly access the specified column within this row
+            if column < len (self._data [row-1]):
+
+                # insert the value
+                self._data [row-1][column] = value
+
+            else:                       # if this column goes beyond the current size
+
+                # create extra columns and add them to the coresponding row
+                extracols = [None]*(1+column-len (self._data[row-1]))
+                self._data [row-1].extend (extracols)
+
+                # and try the insertion again
+                self.__setitem__ (key, value)
+
+        else:                           # if this row goes beyond the current size
+
+            # add as many empty rows as necessary
+            for irow in range (row-len (self._data)):
+                self._data.extend ([[]])
+
+            # and make now the insertion
+            self.__setitem__ (key, value)
+
+    def rows (self):
+        '''return the number of rows in the two-dimensional array'''
+
+        return len (self._data)
+
+    def columns (self, row):
+        '''return the number of columns in the given row. The first row index should be 1'''
+
+        return len (self._data[row-1])
+
+    def get_data (self):
+        '''return the two-dimensional array of this instance'''
+
+        return self._data
+            
 
 # -----------------------------------------------------------------------------
 # SPSCommand
@@ -100,6 +210,20 @@ the literal in the given direction
             return "Literal '{0}' in range {1} with direction".format (self._text, self._range, self._direction)
         return "Literal '{0}' in range {1}".format (self._text, self._range)
 
+    def execute (self, data):
+        '''executes this literal updating the contents of the given array
+
+        '''
+
+        # for all cells in the given array
+        for cell in self._range:
+
+            # insert this literal
+            data[cell] = self._text
+
+        # and return the contents created by the execution of this litral
+        return data
+    
         
 # -----------------------------------------------------------------------------
 # SPSQuery
@@ -115,8 +239,11 @@ class SPSQuery (SPSCommand):
 
     def __init__ (self, crange, text, direction=None):
         '''a query consists of inserting the result of a sql query in an
-arbitrary number of cells. As there might be an arbitrary number of
-results, all tuples are inserted in the given direction. However, it is assumed by default that the result of the query consists of a single tuple and thus, there is no direction
+           arbitrary number of cells. As there might be an arbitrary
+           number of results, all tuples are inserted in the given
+           direction. However, it is assumed by default that the
+           result of the query consists of a single tuple and thus,
+           there is no direction
 
         '''
 
@@ -137,7 +264,42 @@ results, all tuples are inserted in the given direction. However, it is assumed 
 
         return self._direction
 
+    def execute (self, data, cursor=None):
+        '''executes the result of this query by updating the contents of the
+           given array using the given cursor.
 
+           Note it is possible to provide no cursor as this query
+           might contain a reference to the database to use which can
+           not be overriden by any directive.
+
+        '''
+
+        # initialization - get the current range
+        rnge = self._range
+        
+        # query the database
+        cursor.execute (self._text[1:-1])
+        result = cursor.fetchall ()
+
+        # for all tuples in the result of the query
+        for value in result:
+
+            # and for all cells in the range of this instance
+            for i, cell in enumerate(rnge):
+
+                # write the index-th value of this tuple in this cell
+                data [cell] = value[i]
+
+            # update the range by sliding it in the given direction
+            if self._direction == 'down':
+                rnge = rnge.add_rows (rnge.number_of_rows ())
+            else:
+                rnge = rnge.add_columns (rnge.number_of_columns ())
+
+        # and return the new data
+        return data
+    
+        
 # -----------------------------------------------------------------------------
 # SPSRegistry
 #
@@ -205,6 +367,34 @@ class SPSRegistry:
 
         return output
 
+    def execute (self, dbname=None):
+        '''executes all commands in this registry from data in the given
+           database if any is given and returns an array of contents
+           to insert into the spreadsheet
+
+        '''
+
+        # initialize a dynamic array to store all contents created by
+        # the execution of all commands in this registry
+        contents = DynamicArray ()
+
+        # if a database has been given, then get a cursor to it
+        if dbname:
+            conn = sqlite3.connect (dbname)
+            cursor = conn.cursor ()
+        
+        # for all commands in this registry
+        for command in self._registry:
+
+            # add the contents created by the execution of this command
+            if command.get_type () == 'literal':                # literals do not 
+                contents = command.execute (contents)           # need databases
+            else:                                               # but queries
+                contents = command.execute (contents, cursor)   # do
+
+        # return all contents
+        return contents
+    
     
 # -----------------------------------------------------------------------------
 # SPSSpreadsheet
@@ -244,6 +434,41 @@ supplied by other means.
 
         return output
 
+    def execute (self, dbname = None, spsname = None, sheetname = None, override=False):
+        '''executes all commands in the registry of this spreadsheet
+           effectively inserting data into the given spreadsheet/sheet
+           name from data in the given database if any is provided.
+
+           If the database is not given, then it is retrieved from the
+           configuration file. If it exists in the configuration file but is
+           given here with override=True then the one given here is used
+           instead. The same rule applies to the name of the spreadsheet to
+           create and also the sheet name.
+
+           Note that all parameters are optional. If they are not
+           given, then they should be supplied in the configuration
+           file.
+
+        '''
+
+        # and now execute all commands in the current registry. The
+        # result is an array of contents to insert into the
+        # spreadsheet
+        contents = self._registry.execute (dbname)
+
+        # get an instance of the sheet that has to be created accessed
+        sheet = pyexcel.Sheet (contents.get_data ())
+
+        print (sheet)
+        
+        # finally save the contents of this sheet into the given file
+        if sheetname:
+            sheet.name = sheetname
+            sheet.save_as (spsname)
+        else:
+            sheet.save_as (
+                spsname)
+            
 
 # -----------------------------------------------------------------------------
 # SPSDeck
@@ -311,7 +536,32 @@ class SPSDeck:
 
         return output
 
-    
+    def execute (self, dbname = None, spsname = None, sheetname = None, override=False):
+        '''executes all commands in the registry of all spreadsheets in this
+           deck effectively inserting data into the given
+           spreadsheet/sheet name from data in the given database if
+           any is provided.
+
+           If the database is not given, then it is retrieved from the
+           configuration file. If it exists in the configuration file but is
+           given here with override=True then the one given here is used
+           instead. The same rule applies to the name of the spreadsheet to
+           create and also the sheet name.
+
+           Note that all parameters are optional. If they are not
+           given, then they should be supplied in the configuration
+           file.
+
+        '''
+
+        # for all spreadsheets in this deck
+        for sps in self._deck:
+
+            # execute all commands in the registry of this specific
+            # spreadsheet
+            sps.execute (dbname, spsname, sheetname)
+
+            
     
 # Local Variables:
 # mode:python

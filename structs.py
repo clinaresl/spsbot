@@ -170,6 +170,56 @@ def get_cellname (index, startrow, nbrows):
 
     
 # -----------------------------------------------------------------------------
+# add_rows
+#
+# returns a new cell which is the given number of rows away from
+# it. If value is positive, it returns a cell below; otherwise, it
+# returns a cell above
+# -----------------------------------------------------------------------------
+def add_rows (cellname, value):
+    '''returns a new cell which is the given number of rows away from
+       it. If value is positive, it returns a cell below; otherwise,
+       it returns a cell above
+
+    '''
+    
+    # get the current column and row of the specified cell
+    (column, row) = get_columnrow (cellname)
+
+    # verify you are not below the first row
+    if row + value < 1:
+        raise ValueError (" add_rows ({0}, {1}) goes above the first row".format (cellname, value))
+    
+    # return the name of a cell which is a given number of rows below
+    # the current one
+    return column + str (row + value)
+    
+# -----------------------------------------------------------------------------
+# add_columns
+#
+# returns a new cell which is the given number of columns away from
+# it. If value is positive, it returns a cell to its right; otherwise,
+# it returns a cell to the left
+# -----------------------------------------------------------------------------
+def add_columns (cellname, value):
+    '''returns a new cell which is the given number of columns away from
+       it. If value is positive, it returns a cell to its right;
+       otherwise, it returns a cell to the left
+
+    '''
+
+    # get the current column and row of the specified cell
+    (column, row) = get_columnrow (cellname)
+
+    # verify you are not below the first column
+    if get_columnindex (column) + value < 0:
+        raise ValueError (" add_columns ({0}, {1}) goes beyond the left margin".format (cellname, value))
+    
+    # return the name of a cell which is a given number of columns below
+    # the current one
+    return get_columnname (get_columnindex (column) + value) + str (row)
+    
+# -----------------------------------------------------------------------------
 # Range
 #
 # Definition of a simple range of cells which provides an iterator
@@ -184,7 +234,10 @@ class Range:
         '''defines a consecutive range of cells as an interval [start,
            end]. Both the start and end are represented with a string
            and a number. The string represents the column, whereas the
-           number represents the row
+           number represents the row. In spite of the start and end,
+           data is privately normalized so that the start represents
+           the upper left corner and the end represents the lower
+           right corner of the range.
 
         '''
 
@@ -274,6 +327,13 @@ class Range:
             # and stop the current iteration
             raise StopIteration ()
 
+    def __len__ (self):
+        '''returns the number of cells in this range'''
+
+        return 1 + \
+            get_index (self._end, self._startrow, 1 + self._endrow - self._startrow) - \
+            get_index (self._start, self._startrow, 1 + self._endrow - self._startrow)
+        
     def get_start (self):
         '''returns the start of the interval'''
 
@@ -282,7 +342,49 @@ class Range:
     def get_end (self):
         '''returns the end of the interval'''
 
+        return self._end
 
+    def add_rows (self, value):
+        '''returns a new range which is the given number of rows away from
+           it. If value is positive, it returns a cell below;
+           otherwise, it returns a cell above
+
+        '''
+
+        return Range ([add_rows (self._start, value), add_rows (self._end, value)])
+
+    def add_columns (self, value):
+        '''returns a new range which is the given number of columns away from
+           it. If value is positive, it returns a cell to its right;
+           otherwise, it returns a cell to the left
+
+        '''
+
+        return Range ([add_columns (self._start, value), add_columns (self._end, value)])
+
+    def number_of_rows (self):
+        '''return the number of rows in this range'''
+
+        # get the row of the top left corner of this range, and also
+        # the and row of the bottom right corner
+        rowstart = get_columnrow (self._start)[1]
+        rowend = get_columnrow (self._end)[1]
+
+        # and return the number of rows
+        return 1 + rowend - rowstart
+
+    def number_of_columns (self):
+        '''return the number of columns in this range'''
+
+        # get the column of the top left corner of this range, and
+        # also the column of the bottom right corner
+        columnstart = get_columnrow (self._start)[0]
+        columnend = get_columnrow (self._end)[0]
+
+        # and return the number of columns
+        return 1 + get_columnindex (columnend) - get_columnindex (columnstart)
+
+        
 
 # Local Variables:
 # mode:python
