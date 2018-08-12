@@ -232,10 +232,28 @@ class SPSParser :
     # data and the commands to write data into the spreadsheet between curly
     # brackets
     def p_spreadsheet (self, p):
-        '''spreadsheet : LCURBRACK commands RCURBRACK'''
+        '''spreadsheet : LCURBRACK commands RCURBRACK
+                       | header LCURBRACK commands RCURBRACK'''
 
-        p[0] = spsstructs.SPSSpreadsheet (p[2])
-                
+        if len (p) == 4:
+            p[0] = spsstructs.SPSSpreadsheet (p[2])
+        else:
+            p[0] = spsstructs.SPSSpreadsheet (p[3], p[1][0], p[1][1], p[1][2])
+
+    # headers are optional and they can specify a spreadsheet, a sheet name
+    # and/or a database to use for executing the queries specified here. Thus,
+    # the first and second string refer to the spreadsheet location and sheet
+    # name; if "using" is given, a database can be specified
+    def p_header (self, p):
+        '''header : STRING COLON STRING 
+                  | STRING COLON STRING USING STRING
+        '''
+
+        if len (p) == 4:
+            p[0] = (p[1][1:-1], p[3][1:-1], None)
+        else:
+            p[0] = (p[1][1:-1], p[3][1:-1], p[5][1:-1])
+            
     def p_commands (self, p):
         '''commands : command
                     | command commands
@@ -307,6 +325,15 @@ class SPSParser :
         p [0] = p[1]
             
     
+    # error handling
+    # -----------------------------------------------------------------------------
+    # Error rule for syntax errors
+    def p_error(self, p):
+        print("Syntax error while processing the database specification file!")
+        print ()
+        sys.exit ()
+    
+
 # -----------------------------------------------------------------------------
 # InteractiveSPSParser
 #

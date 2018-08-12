@@ -1,0 +1,20 @@
+# La primera hoja contiene información administrativa de los alumnos
+
+literal name
+	"Nombre"
+	
+literal surname
+	"Apellidos"
+
+query personal_data
+      "select nombre, apellidos, teoria, practicas, examen from test_table_2 where examen < 5 and teoria <> 0 and practicas <> 0 and examen <> 0 order by apellidos "
+
+"alumnos.ods":"Suspensos" using "alumnos.sqlite" {
+	$A1 literal.name;			# Nombre
+	$B1 literal.surname;			# Apellidos
+	$C1 "Teoria";
+	$D1 "Prácticas";
+	$E1 "Examen";
+	
+	$A2:$E2 down query.personal_data;	# Lee los nombres y apellidos de todos los alumnos
+}

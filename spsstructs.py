@@ -443,7 +443,10 @@ supplied by other means.
            configuration file. If it exists in the configuration file but is
            given here with override=True then the one given here is used
            instead. The same rule applies to the name of the spreadsheet to
-           create and also the sheet name.
+           create and also the sheet name. The only exception is that if it is
+           not possible to determine a dbname/spsname, an exception is raise; if
+           it is not possible to determine a spreadsheet name, then the first
+           one is used by default.
 
            Note that all parameters are optional. If they are not
            given, then they should be supplied in the configuration
@@ -451,23 +454,62 @@ supplied by other means.
 
         '''
 
-        # and now execute all commands in the current registry. The
-        # result is an array of contents to insert into the
-        # spreadsheet
-        contents = self._registry.execute (dbname)
+        def _default_handler (external, internal, msg=None):
+            '''determine the default value to use from two different values: an external
+            value and an internal value. If necessary, "override" is used to
+            solve ties. In case it is not possible to compute a value, raise an
+            error only in case a message is given
+
+            '''
+            if not internal:                            # if no internal value is known
+                value = external                        # take the specified by the user
+            elif not external:                          # if no value is specified by the user
+                value = internal                        # take the internal one
+            else:                                       # if both are given
+                value = external if override else internal      # use override to decide
+            if msg and not value:                       # if no value was found and a msg is given
+                raise ValueError ("""Fatal error - {0}:
+ {1}""".format (msg, self._registry))                     # raise an error
+
+            return value                                # and return the value computed so far
+            
+        # first of all, determine the db, spreadsheet and sheetname to use
+
+        # --dbref
+        dbref = _default_handler (dbname, self._dbref, "No database was given to execute the following commands")
+
+        # --spsname
+        spsref = _default_handler (spsname, self._spsname, "No spreadsheet was given to store the results of executing the following commands")
+
+        # --sheetname
+        sheetnameref = _default_handler (sheetname, self._sheetname)
+
+        print ("""
+
+        Using:
+
+        database: {0}
+        spreadsheet: {1}
+        sheeetname: {2}
+
+        """.format (dbref, spsref, sheetnameref))
+        
+        # and now execute all commands in the current registry. The result is an
+        # array of contents to insert into the spreadsheet
+        contents = self._registry.execute (dbref)
 
         # get an instance of the sheet that has to be created accessed
         sheet = pyexcel.Sheet (contents.get_data ())
 
         print (sheet)
         
-        # finally save the contents of this sheet into the given file
-        if sheetname:
-            sheet.name = sheetname
-            sheet.save_as (spsname)
+        # finally save the contents of this sheet into the given file. If not
+        # sheetname was given, then use the first one by default
+        if sheetnameref:
+            sheet.name = sheetnameref
+            sheet.save_as (spsref)
         else:
-            sheet.save_as (
-                spsname)
+            sheet.save_as (spsref)
             
 
 # -----------------------------------------------------------------------------
@@ -559,7 +601,7 @@ class SPSDeck:
 
             # execute all commands in the registry of this specific
             # spreadsheet
-            sps.execute (dbname, spsname, sheetname)
+            sps.execute (dbname, spsname, sheetname, override)
 
             
     
