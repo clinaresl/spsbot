@@ -45,8 +45,8 @@ import structs
 # indexed by spreadsheet cells
 # -----------------------------------------------------------------------------
 class DynamicArray:
-    """Definition of a (pontentially) inifinite two-dimensional array
-       indexed by spreadsheet cells
+    """Definition of a (pontentially) inifinite two-dimensional array indexed by
+       spreadsheet cells
 
     """
 
@@ -60,8 +60,8 @@ class DynamicArray:
         self._data = [[]]
 
     def __getitem__ (self, key):
-        '''return the evaluation of self[key], where key is a cell name such
-as D4. First row is A, and first column is 1
+        '''return the evaluation of self[key], where key is a cell name such as
+           D4. First row is A, and first column is 1
 
         '''
 
@@ -72,8 +72,8 @@ as D4. First row is A, and first column is 1
         # corresponding to its position (where 'A' is 0)
         column = structs.get_columnindex (col)
 
-        # return the value at the given location provided that the key
-        # is within the range of this dynamic array
+        # return the value at the given location provided that the key is within
+        # the range of this dynamic array
         if row <= len (self._data):
 
             if column < len (self._data [row-1]):
@@ -87,8 +87,10 @@ as D4. First row is A, and first column is 1
             raise IndexError
 
     def __setitem__ (self, key, value):
-        '''set the value of the position corresponding to the given key with the specified content. If necessary, the two-dimensional array is extended to insert the new value
-        
+        '''set the value of the position corresponding to the given key with the
+           specified content. If necessary, the two-dimensional array is
+           extended to insert the new value
+
         '''
 
         # process the key to get both the row and column
@@ -151,20 +153,25 @@ class SPSCommand:
 
     """
 
-    def __init__ (self, crange, ctype, text):
+    def __init__ (self, name, crange, ctype, text):
 
-        '''a command consists of writing data into the spreadsheet in the
-           given range. Commands are characterized by their type
-           (either writing literals or the result of a query), and the
-           string with either the string to literally insert or the
-           query to execute. This is the base class of all type of
-           commands
+        '''a command consists of writing data into the spreadsheet in the given range,
+           given as an instance of Range. Commands are characterized by their
+           type (either writing literals or the result of a query), and the
+           string with either the string to literally insert or the query to
+           execute. Commands can be identified by their name but they are not
+           forced to be given a name
 
-           The range should be given as an instance of Range
+           This is the base class of all type of commands
 
         '''
 
-        self._range, self._type, self._text = crange, ctype, text
+        self._name, self._range, self._type, self._text = name, crange, ctype, text
+
+    def get_name (self):
+        '''return the name of this command'''
+
+        return self._name
 
     def get_range (self):
         '''return the range of this command'''
@@ -192,23 +199,25 @@ class SPSLiteral (SPSCommand):
 
     """
 
-    def __init__ (self, crange, text, direction=None):
-        '''a literal consists of inserting the given text in an arbitrary
-number of cells. In case a direction is given the command replicates
-the literal in the given direction
+    def __init__ (self, name, crange, text, direction=None):
+        '''a literal consists of inserting the given text in an arbitrary number of
+           cells. In case a direction is given the command replicates the
+           literal in the given direction
+
+           Even if a direction is given, it is ignored for literals
 
         '''
 
         # create an instance invoking the constructor of the base class
-        super (SPSLiteral, self).__init__(crange=crange, ctype='literal', text=text)
+        super (SPSLiteral, self).__init__(name=name, crange=crange, ctype='literal', text=text)
         self._direction = direction
         
     def __str__ (self):
         '''provides a human readable representation of the contents of this intance'''
 
-        if self._direction:
-            return "Literal '{0}' in range {1} with direction".format (self._text, self._range, self._direction)
-        return "Literal '{0}' in range {1}".format (self._text, self._range)
+        if self._name:
+            return "Literal '{0}' with contents '{1}' in range {2}".format (self._name, self._text, self._range)
+        return "Explicit literal with contents '{0}' in range {1}".format (self._text, self._range)
 
     def execute (self, data):
         '''executes this literal updating the contents of the given array
@@ -232,23 +241,23 @@ the literal in the given direction
 # sql query
 # -----------------------------------------------------------------------------
 class SPSQuery (SPSCommand):
-    """Definition of a command which consists of inserting the result of a
-       sql query
+    """Definition of a command which consists of inserting the result of a sql query
 
     """
 
-    def __init__ (self, crange, text, direction=None):
-        '''a query consists of inserting the result of a sql query in an
-           arbitrary number of cells. As there might be an arbitrary
-           number of results, all tuples are inserted in the given
-           direction. However, it is assumed by default that the
-           result of the query consists of a single tuple and thus,
-           there is no direction
+    def __init__ (self, name, crange, text, dbref = None, direction=None):
+        '''a query consists of inserting the result of a sql query in an arbitrary
+           number of cells from a given database if provided ---otherwise, it
+           will be computed later. As there might be an arbitrary number of
+           results, all tuples are inserted in the given direction. However, it
+           is assumed by default that the result of the query consists of a
+           single tuple and thus, there is no direction.
 
         '''
 
         # create an instance invoking the constructor of the base class
-        super (SPSQuery, self).__init__(crange=crange, ctype='query', text=text)
+        super (SPSQuery, self).__init__(name=name, crange=crange, ctype='query', text=text)
+        self._dbref = dbref
         self._direction = direction
         
     
@@ -256,27 +265,46 @@ class SPSQuery (SPSCommand):
         '''provides a human readable representation of the contents of this intance'''
 
         if self._direction:
-            return "Query '{0}' in range {1} with direction {2}".format (self._text, self._range, self._direction)
-        return "Query '{0}' in range {1}".format (self._text, self._range)
+            return "Query '{0}' with contents '{1}' in range {2} with direction {3}".format (self._name, self._text, self._range, self._direction)
+        return "Query '{0}' with contents '{1}' in range {2}".format (self._name, self._text, self._range)
 
     def get_direction (self):
         '''return the direction of this command'''
 
         return self._direction
 
-    def execute (self, data, cursor=None):
-        '''executes the result of this query by updating the contents of the
-           given array using the given cursor.
+    def get_dbref (self):
+        '''return the specific database to use when executing this query'''
 
-           Note it is possible to provide no cursor as this query
-           might contain a reference to the database to use which can
-           not be overriden by any directive.
+        return self._dbref
+
+    def execute (self, data, dbname=None):
+        '''executes the result of this query by updating the contents of the given array
+           using the given database unless this query has been created wrt a
+           specific database. In this case, that specific database is used
+           instead
+
+           Note it is possible to provide no database as this query might
+           contain a reference to the database to use which can not be overriden
+           by any directive.
 
         '''
 
         # initialization - get the current range
         rnge = self._range
-        
+
+        # if this query has been defined with regard to a specific database then
+        # use that one; otherwise, use the given database and raise an error if
+        # none can be found
+        dbref = self._dbref if self._dbref else dbname
+        if not dbref:
+            raise ValueError ("""Fatal error - No database has been found for executing the following query:
+ {0}""".format (self))
+
+        # get a cursor to it
+        conn = sqlite3.connect (dbref)
+        cursor = conn.cursor ()
+                    
         # query the database
         cursor.execute (self._text[1:-1])
         result = cursor.fetchall ()
@@ -378,11 +406,6 @@ class SPSRegistry:
         # the execution of all commands in this registry
         contents = DynamicArray ()
 
-        # if a database has been given, then get a cursor to it
-        if dbname:
-            conn = sqlite3.connect (dbname)
-            cursor = conn.cursor ()
-        
         # for all commands in this registry
         for command in self._registry:
 
@@ -390,7 +413,7 @@ class SPSRegistry:
             if command.get_type () == 'literal':                # literals do not 
                 contents = command.execute (contents)           # need databases
             else:                                               # but queries
-                contents = command.execute (contents, cursor)   # do
+                contents = command.execute (contents, dbname)   # do
 
         # return all contents
         return contents
@@ -484,16 +507,6 @@ supplied by other means.
         # --sheetname
         sheetnameref = _default_handler (sheetname, self._sheetname)
 
-        print ("""
-
-        Using:
-
-        database: {0}
-        spreadsheet: {1}
-        sheeetname: {2}
-
-        """.format (dbref, spsref, sheetnameref))
-        
         # and now execute all commands in the current registry. The result is an
         # array of contents to insert into the spreadsheet
         contents = self._registry.execute (dbref)

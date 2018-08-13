@@ -95,6 +95,10 @@ class SPSParser :
         self._query_table = dict ()
         self._literal_table = dict ()
 
+        # and the table for storing specific databases to use when defining
+        # queries
+        self._query_db = dict ()
+
     # lex rules
     # -------------------------------------------------------------------------
 
@@ -216,7 +220,8 @@ class SPSParser :
     # likewise, the declaration of a query consists of the assignment of a query
     # to an identifier
     def p_querydec (self, p):
-        '''querydec : QUERY ID STRING'''
+        '''querydec : QUERY ID STRING
+                    | QUERY ID STRING USING STRING'''
     
         # add this definition to the symbol table of queries only in case it
         # does not exist
@@ -226,6 +231,10 @@ class SPSParser :
             sys.exit (0)
             
         self._query_table [p[2]] = p[3]
+
+        # in case a specific database has been given, then store it in a
+        # different dict
+        self._query_db [p[2]] = p[5][1:-1] if len (p) == 6 else None
 
     # the definition of a spreadsheet consists just of a name of the spreadsheet
     # to create, the sheet name to use and the database to use for extracting
@@ -276,16 +285,16 @@ class SPSParser :
         if len (p) == 3:
             
             if p[2][0] == 'Literal':
-                p[0] = spsstructs.SPSLiteral (structs.Range ([p[1][1:],p[1][1:]]), p[2][1])
+                p[0] = spsstructs.SPSLiteral (p[2][1], structs.Range ([p[1][1:],p[1][1:]]), p[2][2])
             if p[2][0] == 'Query':
-                p[0] = spsstructs.SPSQuery (structs.Range ([p[1][1:],p[1][1:]]), p[2][1])
+                p[0] = spsstructs.SPSQuery (p[2][1], structs.Range ([p[1][1:],p[1][1:]]), p[2][2], p[2][3])
                 
         if len (p) == 6:
             
             if p[5][0] == 'Literal':
-                p[0] = spsstructs.SPSLiteral (structs.Range ([p[1][1:],p[3][1:]]), p[5][1], p[4])
+                p[0] = spsstructs.SPSLiteral (p[5][1], structs.Range ([p[1][1:],p[3][1:]]), p[5][2], p[4])
             if p[5][0] == 'Query':
-                p[0] = spsstructs.SPSQuery (structs.Range ([p[1][1:],p[3][1:]]), p[5][1], p[4])
+                p[0] = spsstructs.SPSQuery (p[5][1], structs.Range ([p[1][1:],p[3][1:]]), p[5][2], p[5][3], p[4])
 
     # contents can be either strings, literals or queries
     def p_content (self, p):
@@ -295,9 +304,11 @@ class SPSParser :
 
         # this grammar rule returns a tuple with the type of content (either a
         # literal or a query), and its value. If literal/query declarations were
-        # used, they are substituted here
+        # used, they are substituted here. This rule returns a triplet
+        # (Literal/Query, Name, Contents). In case it refers to a query, it also
+        # adds a fourth value with the database to use if any is provided
         if len (p) == 3:
-            p [0] = ('Literal', p[1][1:-1])
+            p [0] = ('Literal', None, p[1][1:-1])
         if len (p) == 5:
 
             if p[1] == 'literal':
@@ -306,14 +317,14 @@ class SPSParser :
                     print(" Fatal Error - Unknown literal '{0}'".format (p[3]))
                     sys.exit (0)
                 
-                p[0] = ('Literal', self._literal_table [p[3]])
+                p[0] = ('Literal', p[3], self._literal_table [p[3]])
             else:
 
                 if p[3] not in self._query_table:
                     print(" Fatal Error - Unknown query '{0}'".format (p[3]))
                     sys.exit (0)
                 
-                p[0] = ('Query', self._query_table [p[3]])
+                p[0] = ('Query', p[3], self._query_table [p[3]], self._query_db [p[3]])
         
 
     # in case a command is given wrt a region, its contents can be replicated
