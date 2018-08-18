@@ -32,6 +32,7 @@ __version__  = '1.0'
 # -----------------------------------------------------------------------------
 import pyexcel
 import sqlite3
+import sys
 
 import structs
 
@@ -201,8 +202,7 @@ class SPSLiteral (SPSCommand):
 
     def __init__ (self, name, crange, text, direction=None):
         '''a literal consists of inserting the given text in an arbitrary number of
-           cells. In case a direction is given the command replicates the
-           literal in the given direction
+           cells.
 
            Even if a direction is given, it is ignored for literals
 
@@ -220,15 +220,54 @@ class SPSLiteral (SPSCommand):
         return "Explicit literal with contents '{0}' in range {1}".format (self._text, self._range)
 
     def execute (self, data):
-        '''executes this literal updating the contents of the given array
+        '''executes this literal updating the contents of the given array and returns
+           two components, a dynamic array with the contents that should be
+           modified in the spreadsheet and a dictionary with all modifications
+           to do to the context where this literal has been executed.
 
         '''
 
+        # the context contains information about the geometry of the region used
+        # by executing this literal.
+        context = dict ()
+
+        # initialize the indices to the four corners of the region where this
+        # literal is about to be executed
+        (left, top) = (sys.maxsize, sys.maxsize)
+        (bottom, right) = (0, 0)
+        
         # for all cells in the given array
         for cell in self._range:
 
+            # get the column and row of this cell
+            (column, row) = structs.get_columnrow (cell)
+
+            # and update the corners of this region
+            left = min (structs.get_columnindex (column), left)
+            right = max (structs.get_columnindex (column), right)
+            top = min (row, top)
+            bottom = max (row, bottom)
+
             # insert this literal
             data[cell] = self._text
+
+        # update now the context only in case this is a named literal
+        if self._name:
+            prefix = "literal." + self._name +  "."
+
+            # first, the four corners
+            context [prefix + "nw"] = structs.get_columnname (left) + str (top)
+            context [prefix + "ne"] = structs.get_columnname (right) + str (top)
+            context [prefix + "sw"] = structs.get_columnname (left) + str (bottom)
+            context [prefix + "se"] = structs.get_columnname (right) + str (bottom)
+
+            # and now the mid points in the four sides
+            context [prefix + "north"] = structs.get_columnname ((left + right) / 2) + str (top)
+            context [prefix + "south"] = structs.get_columnname ((left + right) / 2) + str (bottom)
+            context [prefix + "west"]  = structs.get_columnname (left) + str (int ((top+bottom) / 2))
+            context [prefix + "east"]  = structs.get_columnname (right) + str (int ((top+bottom) / 2))
+
+            print (context)
 
         # and return the contents created by the execution of this litral
         return data
@@ -282,7 +321,12 @@ class SPSQuery (SPSCommand):
         '''executes the result of this query by updating the contents of the given array
            using the given database unless this query has been created wrt a
            specific database. In this case, that specific database is used
-           instead
+           instead.
+
+           It returns two components, a dynamic array with the contents that
+           should be modified in the spreadsheet and a dictionary with all
+           modifications to do to the context where this literal has been
+           executed.
 
            Note it is possible to provide no database as this query might
            contain a reference to the database to use which can not be overriden
@@ -290,7 +334,16 @@ class SPSQuery (SPSCommand):
 
         '''
 
-        # initialization - get the current range
+        # the context contains information about the geometry of the region used
+        # by executing this query
+        context = dict ()
+
+        # initialize the indices to the four corners of the region where this
+        # query is about to be executed
+        (left, top) = (sys.maxsize, sys.maxsize)
+        (bottom, right) = (0, 0)
+        
+        # get the current range
         rnge = self._range
 
         # if this query has been defined with regard to a specific database then
@@ -315,6 +368,15 @@ class SPSQuery (SPSCommand):
             # and for all cells in the range of this instance
             for i, cell in enumerate(rnge):
 
+                # get the column and row of this cell
+                (column, row) = structs.get_columnrow (cell)
+
+                # and update the corners of this region
+                left = min (structs.get_columnindex (column), left)
+                right = max (structs.get_columnindex (column), right)
+                top = min (row, top)
+                bottom = max (row, bottom)
+
                 # write the index-th value of this tuple in this cell
                 data [cell] = value[i]
 
@@ -324,6 +386,23 @@ class SPSQuery (SPSCommand):
             else:
                 rnge = rnge.add_columns (rnge.number_of_columns ())
 
+        # update now the context only in case this is a named literal
+        prefix = "query." + self._name +  "."
+        
+        # first, the four corners
+        context [prefix + "nw"] = structs.get_columnname (left) + str (top)
+        context [prefix + "ne"] = structs.get_columnname (right) + str (top)
+        context [prefix + "sw"] = structs.get_columnname (left) + str (bottom)
+        context [prefix + "se"] = structs.get_columnname (right) + str (bottom)
+        
+        # and now the mid points in the four sides
+        context [prefix + "north"] = structs.get_columnname ((left + right) / 2) + str (top)
+        context [prefix + "south"] = structs.get_columnname ((left + right) / 2) + str (bottom)
+        context [prefix + "west"]  = structs.get_columnname (left) + str (int ((top+bottom) / 2))
+        context [prefix + "east"]  = structs.get_columnname (right) + str (int ((top+bottom) / 2))
+
+        print (context)
+                
         # and return the new data
         return data
     
@@ -402,6 +481,10 @@ class SPSRegistry:
 
         '''
 
+        # a registry keeps a context with different variables with the regions
+        # filled by the queries and literals in it.
+        context = dict ()
+        
         # initialize a dynamic array to store all contents created by
         # the execution of all commands in this registry
         contents = DynamicArray ()
