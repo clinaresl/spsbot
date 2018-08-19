@@ -31,6 +31,7 @@ __version__  = '1.0'
 # imports
 # -----------------------------------------------------------------------------
 import pyexcel
+import re
 import sqlite3
 import sys
 
@@ -145,6 +146,95 @@ class DynamicArray:
             
 
 # -----------------------------------------------------------------------------
+# SPSCell
+#
+# Definition of a cell given either explicitly or with variables and an optional
+# offset
+# -----------------------------------------------------------------------------
+class SPSCell:
+    """Definition of a cell given either explicitly or with variables and an
+       optional offset
+
+    """
+
+    def __init__ (self, descriptor, coloffset=0, rowoffset=0):
+        """A cell can be defined either explicitly, e.g., H27, or with a variable, e.g.,
+           query.personal_data.sw. Additionally, it can be defined with an
+           offset in colummns and rows
+
+           If a cell is created explicitly, then its location is perfectly known
+           even if a non-null offset is given. However, if it is declared wrt a
+           variable, then a context is required to compute its location.
+
+        """
+
+        self._descriptor, self._coloffset, self._rowoffset = descriptor, coloffset, rowoffset
+
+        # by default the location of this cell is unknown until the execution
+        # method is invoked
+        self._cell = None
+
+
+    def get_descriptor (self):
+        """ returns the descriptor of this cell"""
+
+        return self._descriptor
+        
+    
+    def get_coloffset (self):
+        """ returns the column offset of this cell"""
+
+        return self._coloffset
+        
+    
+    def get_rowoffset (self):
+        """ returns the row offset of this cell"""
+
+        return self._rowoffset
+
+    def __str__ (self):
+        '''provides a human readable representation of the contents of this intance'''
+
+        if self._coloffset or self._rowoffset:
+            output = self._descriptor + " + (" + str (self._coloffset) + ", " + str (self._rowoffset) + ")"
+        else:
+            output = self._descriptor
+
+        # if this cell is already known 
+        if self._cell:
+            return self._cell + ": " + output
+
+        # otherwise return a textual interpretation of the contents of this instance
+        return output
+
+    def execute (self, context):
+        """compute the exact location of this cell: if a variable is used, it is
+        resolved with the context. Additionally, if an offset is given, it is
+        applied as well.
+
+        A context is a dictionary of variable names to cell names
+
+        """
+
+        # is the descript a cell given explicitly? If so, use it directly,
+        # otherwise, retrieve it from the context
+        if re.match ("[a-zA-Z]+\d+", self._descriptor):
+            self._cell = self._descriptor
+        else:
+            if self._descriptor in context:
+                self._cell = context[self._descriptor]
+            else:
+                raise ValueError (" The descriptor {0} was not found in the context {1}".format (self._descriptor, context))
+
+        # now, once the location is known, apply the offset
+        self._cell = structs.add_columns (self._cell, self._coloffset)
+        self._cell = structs.add_rows (self._cell, self._rowoffset)
+        
+        # and return the cell
+        return self._cell
+    
+    
+# -----------------------------------------------------------------------------
 # SPSCommand
 #
 # Definition of a basic command
@@ -157,11 +247,11 @@ class SPSCommand:
     def __init__ (self, name, crange, ctype, text):
 
         '''a command consists of writing data into the spreadsheet in the given range,
-           given as an instance of Range. Commands are characterized by their
-           type (either writing literals or the result of a query), and the
-           string with either the string to literally insert or the query to
-           execute. Commands can be identified by their name but they are not
-           forced to be given a name
+           given as a tuple of two instances of SPSCell. Commands are
+           characterized by their type (either writing literals or the result of
+           a query), and the string with either the string to literally insert
+           or the query to execute. Commands can be identified by their name but
+           they are not forced to be given a name
 
            This is the base class of all type of commands
 
@@ -216,28 +306,29 @@ class SPSLiteral (SPSCommand):
         '''provides a human readable representation of the contents of this intance'''
 
         if self._name:
-            return "Literal '{0}' with contents '{1}' in range {2}".format (self._name, self._text, self._range)
-        return "Explicit literal with contents '{0}' in range {1}".format (self._text, self._range)
+            return "\tLiteral '{0}' with contents '{1}' in range {2} : {3}".format (self._name, self._text, self._range[0], self._range[1])
+        return "\tExplicit literal with contents '{0}' in range {1} : {2}".format (self._text, self._range[0], self._range[1])
 
-    def execute (self, data):
-        '''executes this literal updating the contents of the given array and returns
-           two components, a dynamic array with the contents that should be
-           modified in the spreadsheet and a dictionary with all modifications
-           to do to the context where this literal has been executed.
+    def execute (self, data, context):
+        '''executes this literal updating the contents of the given array and the
+           current context. It returns two components, a dynamic array with the
+           contents that should be modified in the spreadsheet and a dictionary
+           with all modifications to do to the context where this literal has
+           been executed.
 
         '''
 
-        # the context contains information about the geometry of the region used
-        # by executing this literal.
-        context = dict ()
-
-        # initialize the indices to the four corners of the region where this
+        # first of all, compute the range of cells where this command should be
+        # executed
+        rnge = structs.Range ([self._range[0].execute (context), self._range[1].execute (context)])
+        
+        # now, initialize the indices to the four corners of the region where this
         # literal is about to be executed
         (left, top) = (sys.maxsize, sys.maxsize)
         (bottom, right) = (0, 0)
         
         # for all cells in the given array
-        for cell in self._range:
+        for cell in rnge:
 
             # get the column and row of this cell
             (column, row) = structs.get_columnrow (cell)
@@ -270,7 +361,7 @@ class SPSLiteral (SPSCommand):
             print (context)
 
         # and return the contents created by the execution of this litral
-        return data
+        return (data, context)
     
         
 # -----------------------------------------------------------------------------
@@ -304,8 +395,8 @@ class SPSQuery (SPSCommand):
         '''provides a human readable representation of the contents of this intance'''
 
         if self._direction:
-            return "Query '{0}' with contents '{1}' in range {2} with direction {3}".format (self._name, self._text, self._range, self._direction)
-        return "Query '{0}' with contents '{1}' in range {2}".format (self._name, self._text, self._range)
+            return "\tQuery '{0}' with contents '{1}' in range {2} : {3} with direction {4}".format (self._name, self._text, self._range[0], self._range[1], self._direction)
+        return "\tQuery '{0}' with contents '{1}' in range {2} : {3}".format (self._name, self._text, self._range[0], self._range[1])
 
     def get_direction (self):
         '''return the direction of this command'''
@@ -317,11 +408,11 @@ class SPSQuery (SPSCommand):
 
         return self._dbref
 
-    def execute (self, data, dbname=None):
+    def execute (self, data, context, dbname=None):
         '''executes the result of this query by updating the contents of the given array
-           using the given database unless this query has been created wrt a
-           specific database. In this case, that specific database is used
-           instead.
+           using the given database (unless this query has been created wrt a
+           specific database; in such a case, that specific database is used
+           instead), and the current context.
 
            It returns two components, a dynamic array with the contents that
            should be modified in the spreadsheet and a dictionary with all
@@ -334,18 +425,15 @@ class SPSQuery (SPSCommand):
 
         '''
 
-        # the context contains information about the geometry of the region used
-        # by executing this query
-        context = dict ()
-
+        # first of all, compute the range of cells where this command should be
+        # executed
+        rnge = structs.Range ([self._range[0].execute (context), self._range[1].execute (context)])
+        
         # initialize the indices to the four corners of the region where this
         # query is about to be executed
         (left, top) = (sys.maxsize, sys.maxsize)
         (bottom, right) = (0, 0)
         
-        # get the current range
-        rnge = self._range
-
         # if this query has been defined with regard to a specific database then
         # use that one; otherwise, use the given database and raise an error if
         # none can be found
@@ -404,7 +492,7 @@ class SPSQuery (SPSCommand):
         print (context)
                 
         # and return the new data
-        return data
+        return (data, context)
     
         
 # -----------------------------------------------------------------------------
@@ -493,10 +581,10 @@ class SPSRegistry:
         for command in self._registry:
 
             # add the contents created by the execution of this command
-            if command.get_type () == 'literal':                # literals do not 
-                contents = command.execute (contents)           # need databases
-            else:                                               # but queries
-                contents = command.execute (contents, dbname)   # do
+            if command.get_type () == 'literal':
+                (contents, context) = command.execute (contents, context)
+            else:
+                (contents, context) = command.execute (contents, context, dbname)
 
         # return all contents
         return contents
@@ -536,7 +624,7 @@ supplied by other means.
         output += " Spreadsheet: {0}\n".format (self._spsname if self._spsname else "<Unknown>")
         output += " Sheet name : {0}\n".format (self._sheetname if self._sheetname else "<Unknown>")
         output += " Database   : {0}\n".format (self._dbref if self._dbref else "<Unknown>")
-        output += " Registry   :\n{0}".format (self._registry)
+        output += "\n Registry   :\n{0}".format (self._registry)
 
         return output
 

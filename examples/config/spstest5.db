@@ -7,9 +7,6 @@ literal surname
 	"Apellidos"
 
 query personal_data
-      "select nombre, apellidos, teoria, practicas, examen from test_table_2 where examen < 5 and teoria <> 0 and practicas <> 0 and examen <> 0 order by apellidos "
-
-query personal_data
       "select nombre, apellidos, teoria, practicas, examen from test_table_2 where examen < 5 and teoria <> 0 and practicas <> 0 and examen <> 0 order by apellidos " using "test.sqlite"
 
 "alumnos.ods":"Suspensos" using "alumnos.sqlite" {

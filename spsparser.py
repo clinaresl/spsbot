@@ -77,9 +77,11 @@ class SPSParser :
         'SEMICOLON',
         'COLON',
         'COMMA',
+        'PLUS',
         'DOT',
         'ID',
-        'CELL'
+        'CELL',
+        'VARIABLE'
         ) + tuple(reserved_words.values ())
 
     def __init__ (self):
@@ -109,6 +111,7 @@ class SPSParser :
     t_RPARENTHESIS = r'\)'
     t_SEMICOLON  = r';'
     t_COLON      = r':'
+    t_PLUS       = r'\+'
     t_COMMA      = r','
     t_DOT        = r'\.'
 
@@ -138,6 +141,13 @@ class SPSParser :
     # Definition of cells as an alpha character and a number
     def t_CELL (self, t):
         r'\$[a-zA-Z]+\d+'
+
+        return t
+    
+    # Definition of variables as three groups of alpha characters separated by
+    # dots and preceded by a dollar sign
+    def t_VARIABLE (self, t):
+        r'\$[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+'
 
         return t
     
@@ -279,22 +289,39 @@ class SPSParser :
     # result of a query in a cell and also to replicate a string in all cells of
     # a region.
     def p_command (self, p):
-        '''command : CELL content
-                   | CELL COLON CELL direction content'''
+        '''command : celldec content
+                   | celldec COLON celldec direction content'''
 
         if len (p) == 3:
             
             if p[2][0] == 'Literal':
-                p[0] = spsstructs.SPSLiteral (p[2][1], structs.Range ([p[1][1:],p[1][1:]]), p[2][2])
+                p[0] = spsstructs.SPSLiteral (p[2][1], (p[1],p[1]), p[2][2])
             if p[2][0] == 'Query':
-                p[0] = spsstructs.SPSQuery (p[2][1], structs.Range ([p[1][1:],p[1][1:]]), p[2][2], p[2][3])
+                p[0] = spsstructs.SPSQuery (p[2][1], (p[1],p[1]), p[2][2], p[2][3])
                 
         if len (p) == 6:
             
             if p[5][0] == 'Literal':
-                p[0] = spsstructs.SPSLiteral (p[5][1], structs.Range ([p[1][1:],p[3][1:]]), p[5][2], p[4])
+                p[0] = spsstructs.SPSLiteral (p[5][1], (p[1],p[3]), p[5][2], p[4])
             if p[5][0] == 'Query':
-                p[0] = spsstructs.SPSQuery (p[5][1], structs.Range ([p[1][1:],p[3][1:]]), p[5][2], p[5][3], p[4])
+                p[0] = spsstructs.SPSQuery (p[5][1], (p[1],p[3]), p[5][2], p[5][3], p[4])
+
+    # cells can be given either explicitly, e.g., $H27 or with a variable such
+    # as $query.personal_data.sw. Additionally, an offset might be applied if
+    # desired in the form "+ (coloffset, rowoffset)"
+    def p_celldec (self,p):
+        '''celldec : CELL
+                   | VARIABLE
+                   | CELL PLUS LPARENTHESIS NUMBER COMMA NUMBER RPARENTHESIS
+                   | VARIABLE PLUS LPARENTHESIS NUMBER COMMA NUMBER RPARENTHESIS'''
+
+        # given either explicitly or with a variable and no offset
+        if len (p) == 2:
+            p[0] = spsstructs.SPSCell (p[1][1:])
+
+        # given either explicitly or with a variable and an offset
+        else:
+            p[0] = spsstructs.SPSCell (p[1][1:], p[4], p[6])    
 
     # contents can be either strings, literals or queries
     def p_content (self, p):

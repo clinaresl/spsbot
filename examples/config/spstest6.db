@@ -1,0 +1,36 @@
+# Literales
+# -----------------------------------------------------------------------------
+literal name
+	"Nombre"
+	
+literal surname
+	"Apellidos"
+
+literal average
+	"=AVERAGE(D2:D39)"
+
+# Queries
+# -----------------------------------------------------------------------------
+query personal_data
+      "select nombre, apellidos, teoria, practicas, examen from test_table_2 where examen < 5 and teoria <> 0 and practicas <> 0 and examen <> 0 order by apellidos "
+
+# Hojas
+# -----------------------------------------------------------------------------
+"alumnos.xlsx":"Suspensos" using "alumnos.sqlite" {
+
+        # Cabeceras
+	$B1 literal.name;			# Nombre
+	$C1 literal.surname;			# Apellidos
+	$D1 "Teoria";
+	$E1 "Prácticas";
+	$F1 "Examen";
+
+        # Datos de los alumnos leidos de la base de datos
+	$B2:$F2 down query.personal_data;	# Lee los nombres y apellidos de todos los alumnos
+
+	# por último, se añade una línea debajo de la región anterior
+        # y se calculan las medias de "Teoría", "Prácticas" y "Examen"
+	$query.personal_data.sw + (1,2) "Media";
+	$query.personal_data.sw + (2,2):$query.personal_data.se + (0,2) right literal.average;
+
+}
