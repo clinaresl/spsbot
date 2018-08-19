@@ -9,7 +9,7 @@ literal surname
 # el siguiente literal inserta efectivamente una fórmula, puesto que
 # empieza por '='
 literal average
-	"=AVERAGE(D2:D39)"
+	"=AVERAGE($query.personal_data.north:$query.personal_data.south)"
 
 # Queries
 # -----------------------------------------------------------------------------

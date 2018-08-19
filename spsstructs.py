@@ -37,6 +37,114 @@ import sys
 
 import structs
 
+# functions
+# -----------------------------------------------------------------------------
+
+# evaluate
+# -----------------------------------------------------------------------------
+def evaluate (pattern, repl, string):
+    '''Return the string obtained by evaluating the leftmost non-overlapping
+       occurrences of pattern in string preceded by '$'and an offset specified
+       in the form "+(<number>, <number>)" with the values in replacement repl
+       and the given offset. If the pattern isn’t found, string is returned
+       unchanged. repl must be a dictionary which specifies, for every feasible
+       match, the value that should be used in the substitution.
+
+       Example: 
+
+          evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
+                    {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
+                    "=AVERAGE($query.personal_data.nw + (-1,1), $query.personal_data.sw + (4,1))"
+
+          produces "=AVERAGE(A3, F42)"
+
+       Note, however, that if more than a dollar sign is given, only the
+       rightmost is used in the substitution.
+
+       Example:
+
+          evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
+                    {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
+                    "=AVERAGE($query.personal_data.nw + (-1,1), $$query.personal_data.sw + (4,1))"
+
+          (note the "$$" in string)
+
+          produces "=AVERAGE(A3, $F42)"
+
+    '''
+
+    # for all occurrences of the given pattern which are preceded by the dollar
+    # sign and followed by an offset
+    for match in re.finditer (r'\$' + pattern + r'\s*\+\s*\(\s*[\+-]?\d+,\s*[\+-]?\d+\)', string):
+
+        # process this occurrence for extracting the variable and the offset
+        m = re.match (r'(' + pattern + r')' + r'\s*\+\s*\(\s*([\+-]?\d+),\s*([\+-]?\d+)\)', match.group ()[1:])
+
+        # create now a spscell with the information extracted so far and
+        # evaluate the expression with the information given in replacement
+        cell = SPSCell (m.groups ()[0], int (m.groups ()[1]), int (m.groups ()[2]))
+        result = cell.execute (repl)
+
+        # and now simply substitute this match with the result of the evaluation
+        # but take special care with the offset: it could be given with the plus
+        # sign which should be escaped
+        coloffset = r'\+' + m.groups ()[1][1:] if m.groups ()[1][0]=='+' else m.groups ()[1]
+        rawoffset = r'\+' + m.groups ()[2][1:] if m.groups ()[2][0]=='+' else m.groups ()[2]
+        string = re.sub (r"\${0}\s*\+\s*\(\s*{1},\s*{2}\)".format(m.groups ()[0], coloffset,rawoffset), result, string)
+
+    # and return the resulting string
+    return string
+
+
+# substitute
+# -----------------------------------------------------------------------------
+def substitute (pattern, repl, string):
+    '''Return the string obtained by replacing the leftmost non-overlapping
+       occurrences of pattern in string preceded by '$' by the replacement
+       repl. If the pattern isn’t found, string is returned unchanged. repl must
+       be a dictionary which specifies, for every feasible match, the value that
+       should be used in the substitution.
+
+       Example: 
+
+          substitute (r'[a-zA-Z]+', {'name': "Alan", 'surname': "Turing"},
+                      "My name is $name $surname") 
+          produces "My name is Alan Turing"
+
+       Incidentally, if the pattern is preceded of various '$' then all but the
+       rightmost are preserved.
+
+       Example: 
+
+          substitute (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
+                      {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
+                      "=AVERAGE($query.personal_data.nw, $query.personal_data.sw)")
+
+          produces "=AVERAGE(B2, B41)"
+
+          but
+
+          substitute (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
+                      {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
+                      "=AVERAGE($$query.personal_data.nw, $$query.personal_data.sw)")
+
+          (note the "$$" in string)
+
+          produces "=AVERAGE($B2, $B41)"
+
+    '''
+
+    # for all occurrences of the given pattern which are preceded by the dollar
+    # sign
+    for match in re.finditer (r'\$' + pattern, string):
+
+        # perform the substitution
+        string = re.sub ("\${0}".format (match.group ()[1:]), repl[match.group ()[1:]], string)
+
+    # and return the resulting string
+    return string
+
+    
 # classes
 # -----------------------------------------------------------------------------
 
@@ -292,7 +400,9 @@ class SPSLiteral (SPSCommand):
 
     def __init__ (self, name, crange, text, direction=None):
         '''a literal consists of inserting the given text in an arbitrary number of
-           cells.
+           cells. Importantly, literals can contain variables in the form
+           $<text>.<text>.<text> which should be resolved within the given
+           context of the registry where they are executed
 
            Even if a direction is given, it is ignored for literals
 
@@ -316,11 +426,22 @@ class SPSLiteral (SPSCommand):
            with all modifications to do to the context where this literal has
            been executed.
 
+           Importantly, literals acknowledge the substitution of variables
+           according to the given context
+
         '''
 
         # first of all, compute the range of cells where this command should be
         # executed
         rnge = structs.Range ([self._range[0].execute (context), self._range[1].execute (context)])
+
+        # now, perform all necessay substitutions. First, those where variables
+        # appear along with an offset
+        text = evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, self._text)
+        
+        # next, substitute the occurrence of all variables which do not come
+        # with an offset
+        text = substitute (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, text)
         
         # now, initialize the indices to the four corners of the region where this
         # literal is about to be executed
@@ -340,7 +461,7 @@ class SPSLiteral (SPSCommand):
             bottom = max (row, bottom)
 
             # insert this literal
-            data[cell] = self._text
+            data[cell] = text
 
         # update now the context only in case this is a named literal
         if self._name:
