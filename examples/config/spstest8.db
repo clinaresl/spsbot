@@ -7,7 +7,9 @@ literal surname
 	"Apellidos"
 
 # el siguiente literal inserta efectivamente una fórmula, puesto que
-# empieza por '='
+# empieza por '='. Además, usa variables y un desplazamiento para
+# tener en cuenta todas las posiciones ocupadas precisamente por la
+# ejecución de la query 'personal_data'
 literal average
 	"=AVERAGE($query.personal_data.nw + (+2,0):$query.personal_data.sw + (+2,0))"
 
