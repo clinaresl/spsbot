@@ -40,6 +40,35 @@ import structs
 # functions
 # -----------------------------------------------------------------------------
 
+# drag
+# -----------------------------------------------------------------------------
+def drag (offset, string):
+    '''replace the occurrence of each cell not preceded by '$' with a new cell where
+       the given offset is applied. The offset is given in the form
+       (<col-offset>, <row-offset>)
+
+       Example:
+
+          drag ((+2,-1), "C31 + $D31 + E31")
+
+       produces "E30 + $D31 + G30"
+
+    '''
+
+    # match any cell name which is not preceded by '$'
+    for match in re.finditer (r'(?<!\$)[a-zA-Z]+\d+', string):
+
+        # now, add to this cell the given offset
+        cell = structs.add_columns (match.group (), offset[0])
+        cell = structs.add_rows (cell, offset[1])
+
+        # and perform the substitution
+        string = re.sub (match.group (), cell, string)
+
+    # and return the resulting string
+    return string
+
+
 # evaluate
 # -----------------------------------------------------------------------------
 def evaluate (pattern, repl, string):
@@ -447,7 +476,7 @@ class SPSLiteral (SPSCommand):
         # literal is about to be executed
         (left, top) = (sys.maxsize, sys.maxsize)
         (bottom, right) = (0, 0)
-        
+
         # for all cells in the given array
         for cell in rnge:
 
@@ -460,8 +489,14 @@ class SPSLiteral (SPSCommand):
             top = min (row, top)
             bottom = max (row, bottom)
 
+            # and now provide support to formulas by dragging the literal to be
+            # inserted. Compute the offset from the beginning of this range of
+            # this cell
+            offset = structs.sub_cells (rnge._start, cell)
+            extext = drag (offset, text)
+
             # insert this literal
-            data[cell] = text
+            data[cell] = extext
 
         # update now the context only in case this is a named literal
         if self._name:
@@ -478,8 +513,6 @@ class SPSLiteral (SPSCommand):
             context [prefix + "south"] = structs.get_columnname ((left + right) / 2) + str (bottom)
             context [prefix + "west"]  = structs.get_columnname (left) + str (int ((top+bottom) / 2))
             context [prefix + "east"]  = structs.get_columnname (right) + str (int ((top+bottom) / 2))
-
-            print (context)
 
         # and return the contents created by the execution of this litral
         return (data, context)
@@ -610,8 +643,6 @@ class SPSQuery (SPSCommand):
         context [prefix + "west"]  = structs.get_columnname (left) + str (int ((top+bottom) / 2))
         context [prefix + "east"]  = structs.get_columnname (right) + str (int ((top+bottom) / 2))
 
-        print (context)
-                
         # and return the new data
         return (data, context)
     

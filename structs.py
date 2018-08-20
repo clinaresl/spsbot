@@ -218,7 +218,27 @@ def add_columns (cellname, value):
     # return the name of a cell which is a given number of columns below
     # the current one
     return get_columnname (get_columnindex (column) + value) + str (row)
-    
+
+# -----------------------------------------------------------------------------
+# sub_cells
+#
+# returns a tuple with the difference in columns and rows between cellname1 and
+# cellname2 so that if the difference is added to cellname1, cellname2 results
+# -----------------------------------------------------------------------------
+def sub_cells (cellname1, cellname2):
+    '''returns a tuple with the difference in columns and rows between cellname1 and
+       cellname2 so that if the difference is added to cellname1, cellname2
+       results
+
+    '''
+
+    # get the column and row of each cellname
+    (column1, row1) = get_columnrow (cellname1)
+    (column2, row2) = get_columnrow (cellname2)
+
+    # and return the difference in columns and rows
+    return (get_columnindex (column2) - get_columnindex (column1), row2 - row1)
+
 # -----------------------------------------------------------------------------
 # Range
 #
