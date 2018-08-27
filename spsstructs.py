@@ -781,9 +781,10 @@ supplied by other means.
         return output
 
     def execute (self, dbname = None, spsname = None, sheetname = None, override=False):
-        '''executes all commands in the registry of this spreadsheet
-           effectively inserting data into the given spreadsheet/sheet
-           name from data in the given database if any is provided.
+        '''executes all commands in the registry of this spreadsheet. It returns a tuple
+           with the name of the spreadsheet that should be updated and a dict
+           with only one key, the name of the spreadsheet and a dynamic array
+           with its contentss.
 
            If the database is not given, then it is retrieved from the
            configuration file. If it exists in the configuration file but is
@@ -830,31 +831,32 @@ supplied by other means.
         # --sheetname
         sheetnameref = _default_handler (sheetname, self._sheetname)
 
+        # If no sheetname is computed then "Unnamed" is used by default
+        if not sheetnameref:
+            sheetnameref = "Unnamed"
+
+        print (" Creating '{0}:{1}' ...".format (spsref, sheetnameref))
+        
         # and now execute all commands in the current registry. The result is an
         # array of contents to insert into the spreadsheet
         contents = self._registry.execute (dbref)
 
-        # get an instance of the sheet that has to be created accessed
-        sheet = pyexcel.Sheet (contents.get_data ())
+        # and now, create a dictionary with the contents of this sheet
+        sheet = dict ()
+        sheet [sheetnameref] = contents.get_data ()
 
-        print (sheet)
+        # and return a tuple: first with the filename that should contain this
+        # sheet; ssecond, its contents
+        return (spsref, sheet)
         
-        # finally save the contents of this sheet into the given file. If not
-        # sheetname was given, then use the first one by default
-        if sheetnameref:
-            sheet.name = sheetnameref
-            sheet.save_as (spsref)
-        else:
-            sheet.save_as (spsref)
-            
 
 # -----------------------------------------------------------------------------
-# SPSDeck
+# SPSBook
 #
-# A deck consists of a list of spreadsheets
+# A book consists of a list of spreadsheets
 # -----------------------------------------------------------------------------
-class SPSDeck:
-    """A deck consists of a list of spreadsheets
+class SPSBook:
+    """A book consists of a list of spreadsheets
 
     """
 
@@ -864,18 +866,18 @@ class SPSDeck:
 
         '''
 
-        # init the deck if a spreadsheet is given
-        self._deck = []
+        # init the book if a spreadsheet is given
+        self._book = []
         if sps:
-            self._deck.append (sps)
+            self._book.append (sps)
 
         # also init the private counter used for iterating
         self._ith = 0        
     
     def __add__ (self, other):
-        '''extends this deck with all spreadsheets in a different table'''
+        '''extends this book with all spreadsheets in a different table'''
 
-        self._deck += other._deck
+        self._book += other._book
         return self
     
     def __iter__ (self):
@@ -884,16 +886,16 @@ class SPSDeck:
         return self
 
     def __next__ (self):
-        '''returns the next spreadsheet in this deck
+        '''returns the next spreadsheet in this book
 
         '''
 
         # if we did not reach the limit
-        if self._ith < len (self._deck):
+        if self._ith < len (self._book):
 
             # return the current spreadsheet after incrementing the
             # private counter
-            sps = self._deck [self._ith]
+            sps = self._book [self._ith]
             self._ith += 1
             return sps
             
@@ -909,14 +911,14 @@ class SPSDeck:
         '''provides a human readable representation of the contents of this intance'''
 
         output = str ()
-        for sps in self._deck:
+        for sps in self._book:
             output += "{0}\n".format (sps)
 
         return output
 
     def execute (self, dbname = None, spsname = None, sheetname = None, override=False):
         '''executes all commands in the registry of all spreadsheets in this
-           deck effectively inserting data into the given
+           book effectively inserting data into the given
            spreadsheet/sheet name from data in the given database if
            any is provided.
 
@@ -932,12 +934,46 @@ class SPSDeck:
 
         '''
 
-        # for all spreadsheets in this deck
-        for sps in self._deck:
+        # create a dictionary which should contain the books for each file that
+        # should be generated
+        files = dict ()
+        
+        # for all spreadsheets in this book
+        for sps in self._book:
 
             # execute all commands in the registry of this specific
             # spreadsheet
-            sps.execute (dbname, spsname, sheetname, override)
+            (filename, sheet) = sps.execute (dbname, spsname, sheetname, override)
+
+            # if this is the first sheet generated in this spreadsheet
+            if filename not in files:
+
+                # then add this sheet to a new file
+                files[filename] = sheet
+
+            # otherwise
+            else:
+
+                # if a sheet already exists in this spreadsheet with the same
+                # name
+                if list(sheet.keys ())[0] in files[filename]:
+
+                    raise ValueError (" The file '{0}' already contains a sheet named '{1}'".format (filename, list(sheet.keys ())[0]))
+
+                # otherwise, add this sheet to this spreadsheet
+                else:
+                    
+                    files[filename].update (sheet)
+
+        # now, iterate over all files to generate
+        for spreadsheet in files.keys ():
+
+            # create a book for this spreadsheet 
+            book = pyexcel.Book ()
+            book.bookdict = files[spreadsheet]
+
+            # and save its contents to this file
+            book.save_as (spreadsheet)
 
             
     

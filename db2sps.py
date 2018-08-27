@@ -48,10 +48,10 @@ if __name__ == '__main__':
 
     # create a database session and parse its contents
     session = spsparser.FileSPSParser ()
-    deck = session.run (args.configuration)
+    book = session.run (args.configuration)
 
     # now, create the sqlite3 database and writes data into it
-    deck.execute (args.db, args.spreadsheet, args.sheetname, args.override)
+    book.execute (args.db, args.spreadsheet, args.sheetname, args.override)
     
 
 

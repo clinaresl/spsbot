@@ -1,0 +1,174 @@
+# Literales
+# -----------------------------------------------------------------------------
+literal name
+	"Nombre"
+	
+literal surname
+	"Apellidos"
+
+
+# -----------------------------------------------------------------------------
+# Generación de la hoja de alumnos suspendidos
+# -----------------------------------------------------------------------------
+
+# el siguiente literal inserta efectivamente una fórmula, puesto que
+# empieza por '='. Además, usa variables y un desplazamiento para
+# tener en cuenta todas las posiciones ocupadas precisamente por la
+# ejecución de la query 'personal_data'. Nótese que la fórmula se
+# arrastra modificando las casillas siempre que no estén precedidas
+# por '$' después de hacer todas las sustituciones
+literal average
+	"=AVERAGE($query.suspensos.nw + (+2,0):$query.suspensos.sw + (+2,0))"
+
+# otras fórmulas para calcular diferentes estadísticos se muestran a
+# continuación
+literal min
+	"=MIN($query.suspensos.nw + (+2,0):$query.suspensos.sw + (+2,0))"
+
+literal max
+	"=MAX($query.suspensos.nw + (+2,0):$query.suspensos.sw + (+2,0))"
+
+literal stddev
+	"=STDEV($query.suspensos.nw + (+2,0):$query.suspensos.sw + (+2,0))"
+
+# otras fórmulas necesarias para el cálculo de la calificación final
+# en la CONVOCATORIA ORDINARIA son las siguientes
+
+# --- cálculo de calificaciones y estadísticos considerando la nota mínima
+
+# calculo de la calificación que obtienen teniendo en cuenta que hay
+# que sacar un 4 en el examen
+literal con_nota_minima
+	"=IF($query.suspensos.ne<4;$query.suspensos.ne;MAX($query.suspensos.nw+(2,0)+$query.suspensos.nw+(3,0)+0.4*$query.suspensos.ne;$query.suspensos.ne))"
+
+literal min_con_nota_minima
+	"=MIN($literal.con_nota_minima.north:$literal.con_nota_minima.south)"
+
+literal avg_con_nota_minima
+	"=AVERAGE($literal.con_nota_minima.north:$literal.con_nota_minima.south)"
+
+literal stddev_con_nota_minima
+	"=STDEV($literal.con_nota_minima.north:$literal.con_nota_minima.south)"
+
+literal max_con_nota_minima
+	"=MAX($literal.con_nota_minima.north:$literal.con_nota_minima.south)"
+
+
+# --- cálculo de calificaciones sin considerar la nota mínima. Algunas
+#     casillas tomarán un valor nulo y, por lo tanto, no se calculan
+#     estadísticos
+
+# cálculo de la calificación a obtener sin tener en cuenta la nota mínima
+literal sin_nota_minima
+	"=IF($query.suspensos.ne<4;MAX($query.suspensos.nw+(2,0)+$query.suspensos.nw+(3,0)+0.4*$query.suspensos.ne;0.6*$query.suspensos.ne);$A1)"
+
+# --- cálculo de calificaciones finales y varios estadísticos de la
+#     EVALUACION CONTINUA
+
+# cálculo de la calificación final
+literal final
+	"=IF(AND($query.suspensos.ne<4;$literal.sin_nota_minima.ne<>$A1;$literal.sin_nota_minima.ne>=5);4.5;$literal.con_nota_minima.ne)"
+
+literal min_final
+	"=MIN($literal.final.north:$literal.final.south)"
+
+literal avg_final
+	"=AVERAGE($literal.final.north:$literal.final.south)"
+
+literal stddev_final
+	"=STDEV($literal.final.north:$literal.final.south)"
+
+literal max_final
+	"=MAX($literal.final.north:$literal.final.south)"
+
+# Queries
+# -----------------------------------------------------------------------------
+
+# Query para la obtención de todos los alumnos aprobados
+
+query aprobados
+      "select nombre, apellidos, teoria, practicas, examen from test_table_2 where examen >= 5 and teoria <> 0 and practicas <> 0 and examen <> 0 order by apellidos"
+
+
+# Query para la obtención de todos los alumnos suspensos
+
+query suspensos
+      "select nombre, apellidos, teoria, practicas, examen from test_table_2 where examen < 5 and teoria <> 0 and practicas <> 0 and examen <> 0 order by apellidos"
+
+# Hojas
+# -----------------------------------------------------------------------------
+
+# --- Hoja de alumnos aprobados
+
+"alumnos.xlsx":"Aprobados" using "alumnos.sqlite" {
+
+        # Cabeceras
+	$B1 literal.name;			# Nombre
+	$C1 literal.surname;			# Apellidos
+	$D1 "Teoria";
+	$E1 "Prácticas";
+	$F1 "Examen";
+
+        # Datos de los alumnos leidos de la base de datos
+	$literal.name.south + (0,1):$F2 down query.aprobados;
+}
+
+# --- Hoja de alumnos suspendidos
+
+"alumnos.xlsx":"Suspensos" using "alumnos.sqlite" {
+
+        # Cabeceras
+	$B1 literal.name;			# Nombre
+	$C1 literal.surname;			# Apellidos
+	$D1 "Teoria";
+	$E1 "Prácticas";
+	$F1 "Examen";
+
+        # Datos de los alumnos leidos de la base de datos
+	$literal.name.south + (0,1):$F2 down query.suspensos;
+
+	# independientemente de donde acabe la ejecución de la query
+        # anterior, se añaden a continuación varias fórmulas con el
+        # cálculo de diferentes valores estadísticos
+
+	# ---Mínimo
+	$query.suspensos.sw + (1,2) "Mínimo";
+	$query.suspensos.sw + (2,2):$query.suspensos.se + (0,2) right literal.min;
+
+	# ---Media
+	$query.suspensos.sw + (1,3) "Media";
+	$query.suspensos.sw + (2,3):$query.suspensos.se + (0,3) right literal.average;
+
+	# ---Desviación estándar
+	$query.suspensos.sw + (1,4) "Desviación estándar";
+	$query.suspensos.sw + (2,4):$query.suspensos.se + (0,4) right literal.stddev;
+
+	# ---Máximo
+	$query.suspensos.sw + (1,5) "Máximo";
+	$query.suspensos.sw + (2,5):$query.suspensos.se + (0,5) right literal.max;
+
+	# A continuación se realiza el cálculo de la calificación final
+
+	# Primero, se calcula la calificación considerando la nota mínima
+	$H1 "Con nota mínima";
+	$H2:$query.suspensos.se+(2,0) down literal.con_nota_minima;
+
+	$literal.con_nota_minima.south + (0,2) literal.min_con_nota_minima;
+	$literal.con_nota_minima.south + (0,3) literal.avg_con_nota_minima;
+	$literal.con_nota_minima.south + (0,4) literal.stddev_con_nota_minima;
+	$literal.con_nota_minima.south + (0,5) literal.max_con_nota_minima;
+
+	# Segundo, sin considerar la nota mínima
+	$I1 "Sin nota mínima";
+	$I2:$query.suspensos.se+(3,0) down literal.sin_nota_minima;
+
+	# Finalmente, la nota definitiva
+	$J1 "Calificación final";
+        $J2:$query.suspensos.se+(4,0) down literal.final;
+
+	$literal.final.south + (0,2) literal.min_final;
+	$literal.final.south + (0,3) literal.avg_final;
+	$literal.final.south + (0,4) literal.stddev_final;
+	$literal.final.south + (0,5) literal.max_final;
+}
+

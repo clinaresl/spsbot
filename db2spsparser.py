@@ -55,14 +55,14 @@ class ShowDatabaseSpec (argparse.Action):
 
         # parse the database
         session = spsparser.FileSPSParser ()
-        deck = session.run (namespace.configuration)
+        book = session.run (namespace.configuration)
             
         # otherwise, process the file through the main entry point provided in
         # dbtools and exit
         print ("""
  Contents of the spreadsheet specification file:
  --------------------------------------------""")
-        print(deck)
+        print(book)
 
         # and finally exit
         sys.exit (0)

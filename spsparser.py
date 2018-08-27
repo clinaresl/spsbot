@@ -193,9 +193,9 @@ class SPSParser :
         if isinstance (p[1], spsstructs.SPSSpreadsheet):
 
             if len (p) == 2:
-                p[0] = spsstructs.SPSDeck (p[1])
+                p[0] = spsstructs.SPSBook (p[1])
             else:
-                p[0] = spsstructs.SPSDeck (p[1]) + p[2]
+                p[0] = spsstructs.SPSBook (p[1]) + p[2]
 
         else:
 
