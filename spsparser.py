@@ -264,14 +264,34 @@ class SPSParser :
     # the first and second string refer to the spreadsheet location and sheet
     # name; if "using" is given, a database can be specified
     def p_header (self, p):
-        '''header : STRING COLON STRING 
-                  | STRING COLON STRING USING STRING
+        '''header : filespec 
+                  | filespec USING STRING
         '''
 
-        if len (p) == 4:
-            p[0] = (p[1][1:-1], p[3][1:-1], None)
+        if len (p) == 2:
+            p[0] = (p[1][0], p[1][1], None)
         else:
-            p[0] = (p[1][1:-1], p[3][1:-1], p[5][1:-1])
+            p[0] = (p[1][0], p[1][1], p[3][1:-1])
+
+    # a file specification serves to indicate the file that should be used for
+    # generating the spreadsheet and a sheet name. Note that these are purely
+    # optional. Indeed, ":" is a shortcut for ' "" : "" '
+    def p_filespec (self, p):
+        '''filespec : STRING COLON STRING
+                    | STRING COLON
+                    | COLON STRING
+                    | COLON'''
+
+        if len (p) == 4:
+            p[0] = (p[1][1:-1], p[3][1:-1])
+        if len (p) == 3:
+
+            if p[1] == self.t_COLON:
+                p[0] = (None, p[2][1:-1])
+            else:
+                p[0] = (p[1][1:-1], None)
+        if len (p) == 2:
+            p[0] = (None, None)
             
     def p_commands (self, p):
         '''commands : command

@@ -60,14 +60,14 @@ literal max_con_nota_minima
 
 # cálculo de la calificación a obtener sin tener en cuenta la nota mínima
 literal sin_nota_minima
-	"=IF($query.suspensos.ne<4;MAX($query.suspensos.nw+(2,0)+$query.suspensos.nw+(3,0)+0.4*$query.suspensos.ne;0.6*$query.suspensos.ne);$A1)"
+	'=IF($query.suspensos.ne<4;MAX($query.suspensos.nw+(2,0)+$query.suspensos.nw+(3,0)+0.4*$query.suspensos.ne;0.6*$query.suspensos.ne);"")'
 
 # --- cálculo de calificaciones finales y varios estadísticos de la
 #     EVALUACION CONTINUA
 
 # cálculo de la calificación final
 literal final
-	"=IF(AND($query.suspensos.ne<4;$literal.sin_nota_minima.ne<>$A1;$literal.sin_nota_minima.ne>=5);4.5;$literal.con_nota_minima.ne)"
+	'=IF(AND($query.suspensos.ne<4;$literal.sin_nota_minima.ne<>"";$literal.sin_nota_minima.ne>=5);4.5;$literal.con_nota_minima.ne)'
 
 literal min_final
 	"=MIN($literal.final.north:$literal.final.south)"
