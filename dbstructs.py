@@ -229,6 +229,11 @@ class DBColumn:
         # from the spreadsheet
         self._data = list ()
 
+    def __eq__ (self, other):
+        '''a column is equal to another if and only if they have the same name in spite of all the other attributes'''
+
+        return self._name == other._name
+        
     def __str__ (self):
         '''provides a human-readable description of the contents of this database'''
 
@@ -346,16 +351,18 @@ class DBColumn:
     
         
 # -----------------------------------------------------------------------------
-# DBTable
+# DBBlock
 #
-# Provides the definition of a database table
+# Provides the definition of a table block. A block consists of a definition of
+# different columns
 # -----------------------------------------------------------------------------
-class DBTable:
+class DBBlock:
     """
-    Provides the definition of a database table
+    Provides the definition of a table block. A block consists of a definition of
+    different columns
     """
 
-    def __init__ (self, name, spreadsheet, sheetname, columns):
+    def __init__ (self, columns):
         '''initializes a database table with the given name and information from all the
         given columns, which shall be instances of DBColumn reading data from
         the given sheetname in the specified spreadsheet
@@ -363,53 +370,30 @@ class DBTable:
         '''
 
         # copy the attributes
-        self._name, self._columns = name, columns
-        self._spreadsheet, self._sheetname = spreadsheet, sheetname
+        self._columns = columns
 
+    def __eq__ (self, other):
+        '''one block is equal to another if and only if they have the same columns (i.e., with the same name) in precisely the same order'''
+
+        return self._columns == other._columns
+        
+    def __ne__ (self, other):
+        '''return whether one block is not equal to another'''
+
+        return not self.__eq__ (other)
+        
     def __str__ (self):
-        '''provides a human-readable description of the contents of this database'''
+        '''provides a human-readable description of the contents of this block'''
 
         output = str ()                         # initialize the output string
-        output += " Name: {0}\n".format (self._name)
-        output += " Spreadsheet: {0}\n".format (self.get_spreadsheet ())
-        output += " Sheet name : {0}\n\n".format (self.get_sheetname ())
         for column in self._columns:
             output += "{0}\n\n".format (column)
 
         return output                           # return the output string
         
-    def get (self, position=-1):
-        '''if no position is given, it returns the list of columns of this instance. In
-           case a non-negative value is provided as a position, then it returns
-           the column in that position
-
-        '''
-
-        if position < 0:
-            return self._columns
-        return self._columns [position]
-
-    def get_name (self):
-        '''returns the name of this table'''
-
-        return self._name
-
-    def get_spreadsheet (self):
-        '''returns the name of the spreadsheet used to read data from'''
-
-        if not self._spreadsheet:
-            return "user defined"
-        return self._spreadsheet
-
-    def get_sheetname (self):
-        '''returns the sheet name used to read data from'''
-
-        if not self._sheetname:
-            return "first one (default)"
-        return self._sheetname
-    
     def lookup (self, spsname, sheetname=None):
-        '''looks up the given spreadsheet. If a sheetname is given, then it access that
+        '''looks up the given spreadsheet and returns a list of tuples to insert in a
+           sqlite3 database. If a sheetname is given, then it access that
            specified sheet; otherwisses, it uses the first one.
 
         '''
@@ -448,18 +432,138 @@ class DBTable:
         # list of tuples, ready to be inserted into the database
         return data
 
+
+# -----------------------------------------------------------------------------
+# DBTable
+#
+# Provides the definition of a database table
+# -----------------------------------------------------------------------------
+class DBTable:
+    """
+    Provides the definition of a database table
+    """
+
+    def __init__ (self, name, spreadsheet, sheetname, columns):
+        '''initializes all blocks of a database table with the given name from the given
+           columns which should be a list of instances of DBColumn. A block is a
+           consecutive definition of different columns. A DBTable is used to
+           populate a sqlite3 database with information retrieved from the given
+           spreadsheet and sheetname ---and if no sheetname is given, then from
+           the first one found by default.
+
+        '''
+
+        # copy the attributes
+        self._name, self._columns = name, columns
+        self._spreadsheet, self._sheetname = spreadsheet, sheetname
+
+        # a block consists of a consecutive definition of different
+        # columns. Thus, the given columns should be examined: if all of them
+        # are different then only one block should be constructed; if a column
+        # is repeated, a new block should be built. All blocks should contain
+        # columns in precisely the same order.
+
+        # initialize the list of blocks in this table
+        self._blocks = list ()
+
+        # at least, the first column belongs to the first block
+        curr = [self._columns[0]]
+
+        # for all the other columns
+        icolumn = 0
+        while icolumn < len (self._columns) - 1:
+
+            # if the next column is already in the current block
+            if self._columns[1 + icolumn] in curr:
+
+                # then the current block should be ended 
+                self._blocks.append (DBBlock (curr))
+
+                # and initialize again the current block
+                icolumn += 1
+                curr = [self._columns [icolumn]]
+
+            else:
+
+                # otherwise, this column should be added to the current block
+                curr.append (self._columns[1 + icolumn])
+
+                # and move to the next column
+                icolumn += 1
+
+        # at this point, curr should contain the last block which should be
+        # added to the list of blocks of this table
+        self._blocks.append (DBBlock (curr))
+
+        # verify now that all blocks are equal, i.e., that they contain the same
+        # columns (with the same name) in precisely the same order
+        for iblock in range (len (self._blocks) - 1):
+
+            if self._blocks[iblock] != self._blocks[1+iblock]:
+
+                raise ValueError ('''The block 
+{0} is not equal to the block 
+
+{1}'''.format (self._blocks[iblock], self._blocks[1+iblock]))
+        
+
+    def __str__ (self):
+        '''provides a human-readable description of the contents of this database'''
+
+        output = str ()                         # initialize the output string
+        output += " Name: {0}\n".format (self._name)
+        output += " Spreadsheet: {0}\n".format (self.get_spreadsheet ())
+        output += " Sheet name : {0}\n\n".format (self.get_sheetname ())
+
+        for block in self._blocks:
+            output += "{0}\n".format (block)
+        
+        return output                           # return the output string
+        
+    def get (self, position=-1):
+        '''if no position is given, it returns the list of columns of this instance. In
+           case a non-negative value is provided as a position, then it returns
+           the column in that position
+
+        '''
+
+        if position < 0:
+            return self._columns
+        return self._columns [position]
+
+    def get_name (self):
+        '''returns the name of this table'''
+
+        return self._name
+
+    def get_spreadsheet (self):
+        '''returns the name of the spreadsheet used to read data from'''
+
+        if not self._spreadsheet:
+            return "user defined"
+        return self._spreadsheet
+
+    def get_sheetname (self):
+        '''returns the sheet name used to read data from'''
+
+        if not self._sheetname:
+            return "first one (default)"
+        return self._sheetname
+    
     def create (self, cursor):
-        '''creates a sqlite3 database table with the schema of its columns with the
-           given name using the given sqlite3 cursor'''
+        '''creates a sqlite3 database table with the schema of its first block with the
+           given name using the given sqlite3 cursor
+
+        '''
 
         cmdline = 'CREATE TABLE ' + self._name + ' ('
-        for column in self._columns[:-1]:               # for all columns but the last one
+        for column in self._blocks[0]._columns[:-1]:    # for all columns but the last one
             cmdline += column.get_name () + ' '         # compose the name of the column
             cmdline += column.get_type () + ', '        # its type and a comma
 
         # do the same with the last one but with a closing parenthesis instead
-        cmdline += self._columns[-1].get_name () + ' '
-        cmdline += self._columns[-1].get_type () + ')'
+        cmdline += self._blocks[0]._columns[-1].get_name () + ' '
+        cmdline += self._blocks[0]._columns[-1].get_type () + ')'
 
         # and now, create the table
         cursor.execute (cmdline)
@@ -484,13 +588,12 @@ class DBTable:
         '''
 
         # create first the specification line to insert data into the sqlite3
-        # database
-        specline = "?, " * (len (self._columns) - 1)
+        # database, which is derived from the schema of its first block
+        specline = "?, " * (len (self._blocks[0]._columns) - 1)
         cmdline = "INSERT INTO %s VALUES (%s)" % (self._name, specline + '?')
 
-        # compute the right spreadsheet and sheetnames to use.
-
-        # if override is given, then the values specified shall be used
+        # compute the right spreadsheet and sheetnames to use. If override is
+        # given, then the values specified shall be used
         if not override:
 
             # If a spreadsheet name or a sheet name were given during the creation
@@ -501,11 +604,14 @@ class DBTable:
 
         # it might happen here that no spreadsheet has been found,
         if not spsname:
-            print (" Fatal Error - no spreadsheet has been given")
-            sys.exit (0)
+
+            raise ValueError(" Fatal Error - no spreadsheet has been given")
 
         # retrieve now data from the spreadsheet (and/or the given sheetname)
-        data = self.lookup (spsname, sheetname)
+        # for each block in this table
+        data = list ()
+        for block in self._blocks:
+            data += block.lookup (spsname, sheetname)
 
         # and insert data
         cursor.executemany (cmdline, data)
