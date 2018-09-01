@@ -191,12 +191,23 @@ class DBParser :
             p[0] = [p[1]] + p[2]
 
     def p_column (self, p):
-        '''column : ID rangelist type SEMICOLON
+        '''column : ID rangelist SEMICOLON
+                  | ID rangelist type SEMICOLON
+                  | ID rangelist action SEMICOLON
                   | ID rangelist type action SEMICOLON'''
 
+        if len (p) == 4:
+            p[0] = dbstructs.DBColumn (p[1], p[2], None, None)
         if len (p) == 5:
-            p[0] = dbstructs.DBColumn (p[1], p[2], p[3], dbstructs.DBAction ('None'))
-        else:
+
+            # if the type was given but not an action
+            if p[3] in ["integer", "real", "text"]:
+                p[0] = dbstructs.DBColumn (p[1], p[2], p[3], dbstructs.DBAction ('None'))
+
+            # otherwise, if an action is given (but not its type)
+            else:
+                p[0] = dbstructs.DBColumn (p[1], p[2], None, p[3])
+        if len (p) == 6:
             p[0] = dbstructs.DBColumn (p[1], p[2], p[3], p[4])
 
     def p_rangelist (self, p):

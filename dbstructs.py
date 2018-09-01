@@ -390,7 +390,7 @@ class DBBlock:
             output += "{0}\n\n".format (column)
 
         return output                           # return the output string
-        
+
     def lookup (self, spsname, sheetname=None):
         '''looks up the given spreadsheet and returns a list of tuples to insert in a
            sqlite3 database. If a sheetname is given, then it access that
@@ -432,6 +432,15 @@ class DBBlock:
         # list of tuples, ready to be inserted into the database
         return data
 
+    def validate (self):
+        '''a block is correct if and only if the type of all its columns is known'''
+
+        for column in self._columns:
+            if not column.get_type ():
+                return False
+
+        return True
+    
 
 # -----------------------------------------------------------------------------
 # DBTable
@@ -505,7 +514,16 @@ class DBTable:
 {0} is not equal to the block 
 
 {1}'''.format (self._blocks[iblock], self._blocks[1+iblock]))
-        
+
+        # finally, the first block should be correct, i.e., the type of all its
+        # columns should have been specified, since that is the specific block
+        # to use for both creating the table and inserting data into it
+        if not self._blocks[0].validate ():
+            raise TypeError ('''
+The block 
+
+{0} contains columns with unspecified types'''.format (self._blocks[0]))
+
 
     def __str__ (self):
         '''provides a human-readable description of the contents of this database'''
