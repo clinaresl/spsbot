@@ -94,7 +94,7 @@ class Sps2DBParser (object):
         self._mandatory.add_argument ('-d', '--db',
                                       type=str,
                                       required=True,
-                                      help="name of the output sqlite3 database")
+                                      help="name of the output sqlite3 database. If a file exists with the same an error is raised")
         self._mandatory.add_argument ('-c', '--configuration',
                                       type=str,
                                       required=True,
@@ -112,6 +112,10 @@ class Sps2DBParser (object):
                                      default=False,
                                      action='store_true',
                                      help="if given, the spreadsheet and the sheetname specified with --spreadsheet and --sheetname are used even if others are found in the configuration file")
+        self._optional.add_argument ('-a', '--append',
+                                     default=False,
+                                     action='store_true',
+                                     help="if given, all data extracted from the spreadsheet is added to the specified database tables; if not, an error is raised in case a database table with the same name is found. In any case, if a database with the same name given with --db exists, execution halts")
 
         # Group of miscellaneous arguments
         self._misc = self._parser.add_argument_group ('Miscellaneous')

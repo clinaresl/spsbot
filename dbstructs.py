@@ -22,6 +22,7 @@ __version__  = '1.0'
 
 # imports
 # -----------------------------------------------------------------------------
+import os                               # access
 import sys                              # exit
 
 import pyexcel
@@ -568,23 +569,39 @@ The block
             return "first one (default)"
         return self._sheetname
     
-    def create (self, cursor):
+    def create (self, cursor, append=False):
         '''creates a sqlite3 database table with the schema of its first block with the
            given name using the given sqlite3 cursor
 
+           If append is True, data is added to the database so that tables might
+           already exist; otherwise, an error is raised in case the same table
+           already exists.
+
         '''
 
-        cmdline = 'CREATE TABLE ' + self._name + ' ('
-        for column in self._blocks[0]._columns[:-1]:    # for all columns but the last one
-            cmdline += column.get_name () + ' '         # compose the name of the column
-            cmdline += column.get_type () + ', '        # its type and a comma
+        # first of all, verify whether this table exists or not
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        if (self._name,) in cursor.fetchall ():
 
-        # do the same with the last one but with a closing parenthesis instead
-        cmdline += self._blocks[0]._columns[-1].get_name () + ' '
-        cmdline += self._blocks[0]._columns[-1].get_type () + ')'
+            # if append is false, then this should be considered as an error;
+            # otherwise, it is not an error, and there is no need to create it
+            # as it already exists
+            if not append:
+                raise ValueError (" Table '{0}' already exists".format (self._name))
+            
+        else:
+            
+            cmdline = 'CREATE TABLE ' + self._name + ' ('
+            for column in self._blocks[0]._columns[:-1]:    # for all columns but the last one
+                cmdline += column.get_name () + ' '         # compose the name of the column
+                cmdline += column.get_type () + ', '        # its type and a comma
 
-        # and now, create the table
-        cursor.execute (cmdline)
+            # do the same with the last one but with a closing parenthesis instead
+            cmdline += self._blocks[0]._columns[-1].get_name () + ' '
+            cmdline += self._blocks[0]._columns[-1].get_type () + ')'
+
+            # and now, create the table
+            cursor.execute (cmdline)
 
     def insert (self, cursor, spsname, sheetname=None, override=False):
         '''insert the data of this table in a sqlite3 database through the given sqlite3
@@ -707,12 +724,20 @@ class DBDatabase:
 
         return output                           # and return the string
 
-    def create (self, dbname):
+    def create (self, dbname, append=False):
         '''creates a sqlite3 database named 'databasename' with the schema of all tables
            in this instance
 
+           If append is given, then all data extracted is added to the specified
+           database tables. Otherwise, an error is issued in case a database is
+           found with the same name
+
         '''
 
+        # make sure no file exists with the same name
+        if (os.access (dbname, os.F_OK)):
+            raise ValueError(" The file '{0}' already exists!".format(dbname))
+        
         # create a connection to the database
         self._dbname = dbname                   # store the name of the database
         self._conn = sqlite3.connect (dbname)   # connect to this database
@@ -720,13 +745,13 @@ class DBDatabase:
 
         # create all tables in this database
         for table in self._tables:              # for all tables
-            table.create (self._cursor)         # create it using this sqlite3 cursor
+            table.create (self._cursor, append) # create it using this sqlite3 cursor
 
         # close the database
         self._conn.commit ()                    # commit all changes
         self._conn.close ()                     # close the database
             
-    def insert (self, dbname, spsname, sheetname=None, override=False):
+    def insert (self, dbname, spsname, sheetname=None, override=False, append=False):
         '''inserts data from the given spreadsheet into the sqlite3 database named
            'databasename' according to the schema of all tables in this
            instance.
@@ -742,6 +767,10 @@ class DBDatabase:
            spreadsheet is used, i.e., the configuration file has precedence
            unless override is True; if none is given anywhere, the first sheet
            found in the spreadsheet is used by default.
+
+           If append is given, then all data extracted is added to the specified
+           database tables. Otherwise, an error is issued in case a database is
+           found with the same name
 
         '''
 

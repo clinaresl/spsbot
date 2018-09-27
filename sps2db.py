@@ -51,8 +51,8 @@ if __name__ == '__main__':
     database = session.run (args.configuration)
 
     # now, create the sqlite3 database and writes data into it
-    database.create (args.db)
-    database.insert (args.db, args.spreadsheet, args.sheetname, args.override)
+    database.create (args.db, args.append)
+    database.insert (args.db, args.spreadsheet, args.sheetname, args.override, args.append)
     
 
 # Local Variables:
