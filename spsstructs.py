@@ -30,6 +30,7 @@ __version__  = '1.0'
 
 # imports
 # -----------------------------------------------------------------------------
+import math
 import pyexcel
 import re
 import sqlite3
@@ -637,9 +638,11 @@ class SPSQuery (SPSCommand):
         context [prefix + "sw"] = structs.get_columnname (left) + str (bottom)
         context [prefix + "se"] = structs.get_columnname (right) + str (bottom)
         
-        # and now the mid points in the four sides
-        context [prefix + "north"] = structs.get_columnname ((left + right) / 2) + str (top)
-        context [prefix + "south"] = structs.get_columnname ((left + right) / 2) + str (bottom)
+        # and now the mid points in the four sides. Note that in case the cell
+        # in the middle is an odd number, the largest integer below it is
+        # selected
+        context [prefix + "north"] = structs.get_columnname (math.floor ((left + right) / 2)) + str (top)
+        context [prefix + "south"] = structs.get_columnname (math.floor ((left + right) / 2)) + str (bottom)
         context [prefix + "west"]  = structs.get_columnname (left) + str (int ((top+bottom) / 2))
         context [prefix + "east"]  = structs.get_columnname (right) + str (int ((top+bottom) / 2))
 
