@@ -145,9 +145,10 @@ class SPSParser :
         return t
     
     # Definition of variables as three groups of alpha characters separated by
-    # dots and preceded by a dollar sign
+    # dots and preceded by a dollar sign. Note that the second group can contain
+    # digits as well
     def t_VARIABLE (self, t):
-        r'\$[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+'
+        r'\$[a-zA-Z_]+\.[a-zA-Z_][a-zA-Z_\d]*\.[a-zA-Z_]+'
 
         return t
     
