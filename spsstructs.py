@@ -768,7 +768,8 @@ class SPSQuery (SPSCommand):
                 bottom = max (row, bottom)
 
                 # write the index-th value of this tuple in this cell
-                data [cell] = value[i]
+                # data [cell] = value[i]
+                data [cell] = SPSCellContent (value[i], get_type (value[i]))
 
             # update the range by sliding it in the given direction
             if self._direction == 'down':
@@ -1103,8 +1104,6 @@ class SPSBook:
             # processed
             pyexcel_bookdict [key] = pyexcel_contents
 
-        print (pyexcel_bookdict)
-            
         # write data to the spreadsheet
         book.bookdict = pyexcel_bookdict
 
