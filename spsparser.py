@@ -338,11 +338,11 @@ class SPSParser :
 
         # given either explicitly or with a variable and no offset
         if len (p) == 2:
-            p[0] = spsstructs.SPSCell (p[1][1:])
+            p[0] = spsstructs.SPSCellReference (p[1][1:])
 
         # given either explicitly or with a variable and an offset
         else:
-            p[0] = spsstructs.SPSCell (p[1][1:], p[4], p[6])    
+            p[0] = spsstructs.SPSCellReference (p[1][1:], p[4], p[6])    
 
     # contents can be either strings, literals or queries
     def p_content (self, p):

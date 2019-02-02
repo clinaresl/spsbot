@@ -30,8 +30,10 @@ __version__  = '1.0'
 
 # imports
 # -----------------------------------------------------------------------------
+import pyexcel                  # reading/writing to various formats of spreadsheets
+import xlsxwriter               # writing to xlsx files
+
 import math
-import pyexcel
 import re
 import sqlite3
 import sys
@@ -41,7 +43,41 @@ import structs
 # functions
 # -----------------------------------------------------------------------------
 
+
+# -----------------------------------------------------------------------------
+# get_type
+#
+# returns the type of its argument, one among [text, integer, real, formula]. If
+# the type cannot be derived, it returns 'unknown'
+# -----------------------------------------------------------------------------
+def get_type (content):
+    '''returns the type of its argument, one among [text, integer, real,
+    formula]. If the type cannot be derived, it returns 'unknown'
+
+    '''
+
+    if isinstance (content, str):
+        return "formula" if content[0] == '=' else "text"
+    elif isinstance (content, float):
+        return "real"
+    elif isinstance (content, int):
+        return "integer"
+    else:
+        return "unknown"
+
+
+# -----------------------------------------------------------------------------
 # drag
+# 
+# replace the occurrence of each cell not preceded by '$' with a new cell where
+# the given offset is applied. The offset is given in the form (<col-offset>,
+# <row-offset>)
+#
+#  Example:
+#
+#       drag ((+2,-1), "C31 + $D31 + E31")
+#
+# produces "E30 + $D31 + G30"
 # -----------------------------------------------------------------------------
 def drag (offset, string):
     '''replace the occurrence of each cell not preceded by '$' with a new cell where
@@ -70,7 +106,36 @@ def drag (offset, string):
     return string
 
 
+# -----------------------------------------------------------------------------
 # evaluate
+#
+# Return the string obtained by evaluating the leftmost non-overlapping
+# occurrences of pattern in string preceded by '$'and an offset specified
+# in the form "+(<number>, <number>)" with the values in replacement repl
+# and the given offset. If the pattern isn’t found, string is returned
+# unchanged. repl must be a dictionary which specifies, for every feasible
+# match, the value that should be used in the substitution.
+#
+# Example: 
+#
+#    evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
+#              {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
+#              "=AVERAGE($query.personal_data.nw + (-1,1), $query.personal_data.sw + (4,1))"
+#
+#    produces "=AVERAGE(A3, F42)"
+#
+# Note, however, that if more than a dollar sign is given, only the
+# rightmost is used in the substitution.
+#
+# Example:
+#
+#    evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
+#              {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
+#              "=AVERAGE($query.personal_data.nw + (-1,1), $$query.personal_data.sw + (4,1))"
+#
+#    (note the "$$" in string)
+#
+#    produces "=AVERAGE(A3, $F42)"
 # -----------------------------------------------------------------------------
 def evaluate (pattern, repl, string):
     '''Return the string obtained by evaluating the leftmost non-overlapping
@@ -112,7 +177,7 @@ def evaluate (pattern, repl, string):
 
         # create now a spscell with the information extracted so far and
         # evaluate the expression with the information given in replacement
-        cell = SPSCell (m.groups ()[0], int (m.groups ()[1]), int (m.groups ()[2]))
+        cell = SPSCellReference (m.groups ()[0], int (m.groups ()[1]), int (m.groups ()[2]))
         result = cell.execute (repl)
 
         # and now simply substitute this match with the result of the evaluation
@@ -126,7 +191,41 @@ def evaluate (pattern, repl, string):
     return string
 
 
+# -----------------------------------------------------------------------------
 # substitute
+#
+# Return the string obtained by replacing the leftmost non-overlapping
+# occurrences of pattern in string preceded by '$' by the replacement
+# repl. If the pattern isn’t found, string is returned unchanged. repl must
+# be a dictionary which specifies, for every feasible match, the value that
+# should be used in the substitution.
+#
+# Example: 
+#
+#    substitute (r'[a-zA-Z]+', {'name': "Alan", 'surname': "Turing"},
+#                "My name is $name $surname") 
+#    produces "My name is Alan Turing"
+#
+# Incidentally, if the pattern is preceded of various '$' then all but the
+# rightmost are preserved.
+#
+# Example: 
+#
+#    substitute (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
+#                {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
+#                "=AVERAGE($query.personal_data.nw, $query.personal_data.sw)")
+#
+#    produces "=AVERAGE(B2, B41)"
+#
+#    but
+#
+#    substitute (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
+#                {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
+#                "=AVERAGE($$query.personal_data.nw, $$query.personal_data.sw)")
+#
+#   (note the "$$" in string)
+#
+#    produces "=AVERAGE($B2, $B41)"
 # -----------------------------------------------------------------------------
 def substitute (pattern, repl, string):
     '''Return the string obtained by replacing the leftmost non-overlapping
@@ -199,6 +298,7 @@ class DynamicArray:
         # initializes the private two-dimensional array
         self._data = [[]]
 
+        
     def __getitem__ (self, key):
         '''return the evaluation of self[key], where key is a cell name such as
            D4. First row is A, and first column is 1
@@ -226,6 +326,7 @@ class DynamicArray:
         else:
             raise IndexError
 
+        
     def __setitem__ (self, key, value):
         '''set the value of the position corresponding to the given key with the
            specified content. If necessary, the two-dimensional array is
@@ -267,16 +368,19 @@ class DynamicArray:
             # and make now the insertion
             self.__setitem__ (key, value)
 
+            
     def rows (self):
         '''return the number of rows in the two-dimensional array'''
 
         return len (self._data)
 
+    
     def columns (self, row):
         '''return the number of columns in the given row. The first row index should be 1'''
 
         return len (self._data[row-1])
 
+    
     def get_data (self):
         '''return the two-dimensional array of this instance'''
 
@@ -284,12 +388,54 @@ class DynamicArray:
             
 
 # -----------------------------------------------------------------------------
-# SPSCell
+# SPSCellContent
+#
+# Definition of contents of an arbitrary cell
+# -----------------------------------------------------------------------------
+class SPSCellContent:
+    """Definition of contents of an arbitrary cell
+
+    """
+
+    def __init__ (self, data, ctype, attributes=None):
+        """The contents of a cell are qualified by its data, its type, which should be
+           restricted to one among: text, integer, real, formula, (i.e., those
+           recognized from the database (but dates) and, additionally, formulae)
+           and its attributes which are free-form strings that should be parsed
+           by xlsxwriter given as a list, or None if none is given
+
+        """
+
+        # verify that the given type is known, and reject unknown types
+        if ctype not in ['text', 'integer', 'real', 'text', 'formula']:
+            raise ValueError (" The cell content type '{0}' is not known!".format (ctype))
+
+        # and copy now the attributes
+        (self._data, self._type, self._attributes) = (data, ctype, attributes)
+
+    def get_data (self):
+        """ returns the contents of this cell"""
+
+        return self._data
+
+    def get_type (self):
+        """ returns the type of contents of this cell"""
+
+        return self._type
+
+    def get_attributes (self):
+        """ return a list with the (xlsxwriter) attributes of this cell"""
+
+        return self._attributes        
+        
+
+# -----------------------------------------------------------------------------
+# SPSCellReference
 #
 # Definition of a cell given either explicitly or with variables and an optional
 # offset
 # -----------------------------------------------------------------------------
-class SPSCell:
+class SPSCellReference:
     """Definition of a cell given either explicitly or with variables and an
        optional offset
 
@@ -385,7 +531,7 @@ class SPSCommand:
     def __init__ (self, name, crange, ctype, text):
 
         '''a command consists of writing data into the spreadsheet in the given range,
-           given as a tuple of two instances of SPSCell. Commands are
+           given as a tuple of two instances of SPSCellReference. Commands are
            characterized by their type (either writing literals or the result of
            a query), and the string with either the string to literally insert
            or the query to execute. Commands can be identified by their name but
@@ -496,8 +642,9 @@ class SPSLiteral (SPSCommand):
             offset = structs.sub_cells (rnge._start, cell)
             extext = drag (offset, text)
 
-            # insert this literal
-            data[cell] = extext
+            # insert the contents of this literal as a cell content qualified by
+            # its type
+            data[cell] = SPSCellContent (extext, get_type (extext))
 
         # update now the context only in case this is a named literal
         if self._name:
@@ -663,7 +810,8 @@ class SPSRegistry:
     """
 
     def __init__ (self, command=None):
-        '''when creating a registry either a command or none has to be given. Commands should be given as instances of SPSCommand (or any of its subtypes)
+        '''when creating a registry either a command or none has to be given. Commands
+           should be given as instances of SPSCommand (or any of its subtypes)
 
         '''
 
@@ -919,6 +1067,51 @@ class SPSBook:
 
         return output
 
+
+    def write_to_pyexcel (self, filename, contents):
+        '''use pyexcel to create a spreadsheet with the given filename and the specified
+           contents. The contents consist of a dictionary where the keys are the
+           sheetname and the value consists of a list of lists, each one
+           containing the items in each row starting from row 1.
+
+           The contents of each cell are specified as instances of
+           SPSCellContent. 
+
+           Rougly speaking, this method strips data and types from the instances
+           of SPSCellContent
+
+        '''
+
+        # create a book for this spreadsheet 
+        book = pyexcel.Book ()
+
+        # process the contents
+        pyexcel_bookdict = dict ()            # create a dict to store all sheets
+        for key, data in contents.items ():
+            pyexcel_contents = list ()        # data to write to this sheet
+            for row in data:                  # for each row starting from 1
+                irow = []                     # create a new list for this row
+                for cell in row:              # and ach column in this row
+                    if cell:                  # if there are contents, write'em
+                        irow.append (cell.get_data ())
+                    else:
+                        irow.append (None)    # otherwise, leave them empty
+                pyexcel_contents.append (irow)
+
+            # and now add these contents to a new sheet as required by pyexcel
+            # where the index is the sheetname and the contents are those just
+            # processed
+            pyexcel_bookdict [key] = pyexcel_contents
+
+        print (pyexcel_bookdict)
+            
+        # write data to the spreadsheet
+        book.bookdict = pyexcel_bookdict
+
+        # and save its contents to this file
+        book.save_as (filename)
+        
+    
     def execute (self, dbname = None, spsname = None, sheetname = None, override=False):
         '''executes all commands in the registry of all spreadsheets in this
            book effectively inserting data into the given
@@ -971,12 +1164,15 @@ class SPSBook:
         # now, iterate over all files to generate
         for spreadsheet in files.keys ():
 
-            # create a book for this spreadsheet 
-            book = pyexcel.Book ()
-            book.bookdict = files[spreadsheet]
+            # if this is an excel 2007 or xlsx file then use xlswriter
+            if re.match (".*\.xlsx", spreadsheet):
 
-            # and save its contents to this file
-            book.save_as (spreadsheet)
+                print (" Support for xlswriter not developed yet!")
+
+            else:
+
+                self.write_to_pyexcel (spreadsheet, files[spreadsheet])
+                
 
             
     
