@@ -40,6 +40,8 @@ import ply.yacc as yacc
 import structs
 import spsstructs
 
+import pdb
+
 # classes
 # -----------------------------------------------------------------------------
 
@@ -68,6 +70,7 @@ class SPSParser :
 
     # List of token names. This is always required
     tokens = (
+        'REAL',
         'NUMBER',
         'STRING',
         'LCURBRACK',
@@ -115,8 +118,17 @@ class SPSParser :
     t_COMMA      = r','
     t_DOT        = r'\.'
 
-    # Definition of both integer and real numbers
-    def t_NUMBER(self, t):
+    # Definitions of real numbers which intentionally do not match integer
+    # numbers to avoid confussions with t_NUMBER. Note, in addition, that this
+    # token precedes the NUMBER
+    def t_REAL (self, t):
+        r'[-+]?\d+(\.\d+|[.]?\d*[eE][-+]?\d+)'
+
+        t.value = float (t.value)
+        return t
+    
+    # Definition of numbers
+    def t_NUMBER (self, t):
         r'[\+-]?\d+'
 
         t.value = int (t.value)
@@ -217,16 +229,27 @@ class SPSParser :
     # the declaration of a literal consists just of the assignment of a string
     # to an identifier
     def p_literaldec (self, p):
-        '''literaldec : LITERAL ID STRING'''
+        '''literaldec : LITERAL ID REAL
+                      | LITERAL ID NUMBER
+                      | LITERAL ID STRING'''
 
-        # add this definition to the symbol table of literals only in case it
-        # does not exist
-        if p[3] in self._literal_table:
+        # first, make sure this literal was not previously defined
+        if p[2] in self._literal_table:
 
-            print (" Fatal Error - Conflicting definitions for literal '{0}'".format (p[3]))
-            sys.exit (0)
+            print (" Fatal Error - Conflicting definitions for literal '{0}'".format (p[2]))
+
+        # otherwise, store it in way or another depending upon the type of
+        # literal
+        else:
             
-        self._literal_table [p[2]] = p[3][1:-1]
+            # if the literal is (either) a real or integer number then store it as
+            # is
+            if isinstance (p[3], int) or isinstance (p[3], float):
+                self._literal_table [p[2]] = p[3]
+
+            # and in case it is a string just remove the double quotes
+            if isinstance (p[3], str):
+                self._literal_table [p[2]] = p[3][1:-1]
 
     # likewise, the declaration of a query consists of the assignment of a query
     # to an identifier
@@ -316,16 +339,23 @@ class SPSParser :
         if len (p) == 3:
             
             if p[2][0] == 'Literal':
-                p[0] = spsstructs.SPSLiteral (p[2][1], (p[1],p[1]), p[2][2])
+                p[0] = spsstructs.SPSLiteral (p[2][1], (p[1],p[1]),
+                                              spsstructs.SPSCellContent (p[2][2], p[2][3]))
             if p[2][0] == 'Query':
-                p[0] = spsstructs.SPSQuery (p[2][1], (p[1],p[1]), p[2][2], p[2][3])
+                p[0] = spsstructs.SPSQuery (p[2][1], (p[1],p[1]),
+                                            spsstructs.SPSCellContent (p[2][2], p[2][3]),
+                                            p[2][4])
                 
         if len (p) == 6:
             
             if p[5][0] == 'Literal':
-                p[0] = spsstructs.SPSLiteral (p[5][1], (p[1],p[3]), p[5][2], p[4])
+                p[0] = spsstructs.SPSLiteral (p[5][1], (p[1],p[3]),
+                                              spsstructs.SPSCellContent (p[5][2], p[5][3]),
+                                              p[4])
             if p[5][0] == 'Query':
-                p[0] = spsstructs.SPSQuery (p[5][1], (p[1],p[3]), p[5][2], p[5][3], p[4])
+                p[0] = spsstructs.SPSQuery (p[5][1], (p[1],p[3]),
+                                            spsstructs.SPSCellContent (p[5][2], p[5][3]),
+                                            p[5][4], p[4])
 
     # cells can be given either explicitly, e.g., $H27 or with a variable such
     # as $query.personal_data.sw. Additionally, an offset might be applied if
@@ -346,17 +376,41 @@ class SPSParser :
 
     # contents can be either strings, literals or queries
     def p_content (self, p):
-        '''content : STRING SEMICOLON
+        '''content : REAL SEMICOLON
+                   | NUMBER SEMICOLON
+                   | STRING SEMICOLON
                    | LITERAL DOT ID SEMICOLON
                    | QUERY DOT ID SEMICOLON'''
 
         # this grammar rule returns a tuple with the type of content (either a
         # literal or a query), and its value. If literal/query declarations were
-        # used, they are substituted here. This rule returns a triplet
-        # (Literal/Query, Name, Contents). In case it refers to a query, it also
-        # adds a fourth value with the database to use if any is provided
+        # used, they are substituted here. This rule returns a 4-tuple:
+        #
+        #         (Literal/Query, Name, Contents, Type)
+        # where:
+        #
+        #    Name is given only with named literals, of course
+        #
+        #    Type is either 'real', 'integer', 'text', etc., i.e., those
+        #    recognized by sqlite3 and, additionally, 'formula's
+        #
+        # In case it refers to a query, it also adds a fifth value with the
+        # database to use if any is provided
         if len (p) == 3:
-            p [0] = ('Literal', None, p[1][1:-1])
+
+            # now, distinguish among the three different unnamed literals that
+            # can be used
+            if isinstance (p[1], float):
+                p [0] = ('Literal', None, p[1], 'real')
+            if isinstance (p[1], int):
+                p [0] = ('Literal', None, p[1], 'integer')
+            if isinstance (p[1], str):
+                if p[1]=='=':
+                    p [0] = ('Literal', None, p[1][1:-1], 'formula')
+                else:
+                    p [0] = ('Literal', None, p[1][1:-1], 'text')
+
+        # in case either named literals or queries are been used ... 
         if len (p) == 5:
 
             if p[1] == 'literal':
@@ -365,14 +419,19 @@ class SPSParser :
                     print(" Fatal Error - Unknown literal '{0}'".format (p[3]))
                     sys.exit (0)
                 
-                p[0] = ('Literal', p[3], self._literal_table [p[3]])
+                p[0] = ('Literal', p[3], self._literal_table [p[3]],
+                        spsstructs.get_type (self._literal_table [p[3]]))
             else:
 
                 if p[3] not in self._query_table:
                     print(" Fatal Error - Unknown query '{0}'".format (p[3]))
                     sys.exit (0)
-                
-                p[0] = ('Query', p[3], self._query_table [p[3]], self._query_db [p[3]])
+
+                # note that queries are always of type 'text'. However, its type
+                # is checked so that SPSQuery can check it if needed
+                p[0] = ('Query', p[3], self._query_table [p[3]],
+                        spsstructs.get_type (self._query_table [p[3]]),
+                        self._query_db [p[3]])
         
 
     # in case a command is given wrt a region, its contents can be replicated

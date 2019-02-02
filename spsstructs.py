@@ -528,20 +528,22 @@ class SPSCommand:
 
     """
 
-    def __init__ (self, name, crange, ctype, text):
+    def __init__ (self, name, crange, ctype, content):
 
         '''a command consists of writing data into the spreadsheet in the given range,
            given as a tuple of two instances of SPSCellReference. Commands are
-           characterized by their type (either writing literals or the result of
-           a query), and the string with either the string to literally insert
-           or the query to execute. Commands can be identified by their name but
-           they are not forced to be given a name
+           characterized by their source (either writing literals or the result
+           of a query), and the contents to process which can be either a named
+           or unnamed literal (a string, integer, real ...), or a query to
+           execute.
+
+           The content shall be an instance of SPSCellContent
 
            This is the base class of all type of commands
 
         '''
 
-        self._name, self._range, self._type, self._text = name, crange, ctype, text
+        self._name, self._range, self._type, self._content = name, crange, ctype, content
 
     def get_name (self):
         '''return the name of this command'''
@@ -558,10 +560,10 @@ class SPSCommand:
 
         return self._type
 
-    def get_text (self):
-        '''return the text of this command'''
+    def get_content (self):
+        '''return the content of this command'''
 
-        return self._text
+        return self._content
 
         
 # -----------------------------------------------------------------------------
@@ -574,33 +576,41 @@ class SPSLiteral (SPSCommand):
 
     """
 
-    def __init__ (self, name, crange, text, direction=None):
-        '''a literal consists of inserting the given text in an arbitrary number of
+    def __init__ (self, name, crange, content, direction=None):
+        '''a literal consists of inserting the given content in an arbitrary number of
            cells. Importantly, literals can contain variables in the form
            $<text>.<text>.<text> which should be resolved within the given
            context of the registry where they are executed
+
+           'name' is used to identify named literals
+
+           The range given in 'crange' should consist of a tuple with the
+           starting and ending cells of the cell range
+
+           'content' shall be an instance of SPSCellContent, i.e., it should
+           consists of the value, type and attributes of this content
 
            Even if a direction is given, it is ignored for literals
 
         '''
 
         # create an instance invoking the constructor of the base class
-        super (SPSLiteral, self).__init__(name=name, crange=crange, ctype='literal', text=text)
+        super (SPSLiteral, self).__init__(name=name, crange=crange, ctype='literal', content=content)
         self._direction = direction
         
     def __str__ (self):
         '''provides a human readable representation of the contents of this intance'''
 
         if self._name:
-            return "\tLiteral '{0}' with contents '{1}' in range {2} : {3}".format (self._name, self._text, self._range[0], self._range[1])
-        return "\tExplicit literal with contents '{0}' in range {1} : {2}".format (self._text, self._range[0], self._range[1])
+            return "\tLiteral '{0}' with contents '{1}' in range {2} : {3}".format (self._name, self._content.get_data (), self._range[0], self._range[1])
+        return "\tExplicit literal with contents '{0}' in range {1} : {2}".format (self._content.get_data (), self._range[0], self._range[1])
 
     def execute (self, data, context):
-        '''executes this literal updating the contents of the given array and the
-           current context. It returns two components, a dynamic array with the
-           contents that should be modified in the spreadsheet and a dictionary
-           with all modifications to do to the context where this literal has
-           been executed.
+        '''executes this literal updating the contents of the array given in 'data' and
+           the current 'context'. It returns two components, a dynamic array
+           with the contents that should be modified in the spreadsheet and a
+           dictionary with all modifications to do to the context where this
+           literal has been executed.
 
            Importantly, literals acknowledge the substitution of variables
            according to the given context
@@ -611,14 +621,22 @@ class SPSLiteral (SPSCommand):
         # executed
         rnge = structs.Range ([self._range[0].execute (context), self._range[1].execute (context)])
 
-        # now, perform all necessay substitutions. First, those where variables
-        # appear along with an offset
-        text = evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, self._text)
+        # The value to write in this cell is, initially, the data stored in it
+        value = self._content.get_data ()
         
-        # next, substitute the occurrence of all variables which do not come
-        # with an offset
-        text = substitute (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, text)
+        # in case, and only in case, that this literal is either a string or a
+        # formula, then it might be necessary to evaluate its contents and to
+        # perform substitutions
+        if self._content.get_type () in ['text', 'formula']:
         
+            # now, perform all necessay substitutions. First, those where
+            # variables appear along with an offset
+            value = evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, value)
+        
+            # next, substitute the occurrence of all variables which do not come
+            # with an offset
+            value = substitute (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, value)
+
         # now, initialize the indices to the four corners of the region where this
         # literal is about to be executed
         (left, top) = (sys.maxsize, sys.maxsize)
@@ -639,12 +657,15 @@ class SPSLiteral (SPSCommand):
             # and now provide support to formulas by dragging the literal to be
             # inserted. Compute the offset from the beginning of this range of
             # this cell
-            offset = structs.sub_cells (rnge._start, cell)
-            extext = drag (offset, text)
+            if self._content.get_type () == 'formula':
+                offset = structs.sub_cells (rnge._start, cell)
+                value = drag (offset, value)
 
-            # insert the contents of this literal as a cell content qualified by
-            # its type
-            data[cell] = SPSCellContent (extext, get_type (extext))
+            # finally, insert the contents of this literal with the contents
+            # that result after all modifications performed here but preserving
+            # the type and attributes recognized by the parser
+            data[cell] = SPSCellContent (value, self._content.get_type (),
+                                         self._content.get_attributes ())
 
         # update now the context only in case this is a named literal
         if self._name:
@@ -677,7 +698,7 @@ class SPSQuery (SPSCommand):
 
     """
 
-    def __init__ (self, name, crange, text, dbref = None, direction=None):
+    def __init__ (self, name, crange, content, dbref = None, direction=None):
         '''a query consists of inserting the result of a sql query in an arbitrary
            number of cells from a given database if provided ---otherwise, it
            will be computed later. As there might be an arbitrary number of
@@ -685,20 +706,24 @@ class SPSQuery (SPSCommand):
            is assumed by default that the result of the query consists of a
            single tuple and thus, there is no direction.
 
+           The text of the query is given in 'content' which should be an
+           instance of SPSCellContent so that it contains additional
+           information, the type of content (which should be always 'text' as
+           queries are always strings) and also the cell attributes
+
         '''
 
         # create an instance invoking the constructor of the base class
-        super (SPSQuery, self).__init__(name=name, crange=crange, ctype='query', text=text)
+        super (SPSQuery, self).__init__(name=name, crange=crange, ctype='query', content=content)
         self._dbref = dbref
         self._direction = direction
-        
-    
+
     def __str__ (self):
         '''provides a human readable representation of the contents of this intance'''
 
         if self._direction:
-            return "\tQuery '{0}' with contents '{1}' in range {2} : {3} with direction {4}".format (self._name, self._text, self._range[0], self._range[1], self._direction)
-        return "\tQuery '{0}' with contents '{1}' in range {2} : {3}".format (self._name, self._text, self._range[0], self._range[1])
+            return "\tQuery '{0}' with contents '{1}' in range {2} : {3} with direction {4}".format (self._name, self._content.get_data (), self._range[0], self._range[1], self._direction)
+        return "\tQuery '{0}' with contents '{1}' in range {2} : {3}".format (self._name, self._content.get_data (), self._range[0], self._range[1])
 
     def get_direction (self):
         '''return the direction of this command'''
@@ -749,7 +774,7 @@ class SPSQuery (SPSCommand):
         cursor = conn.cursor ()
                     
         # query the database
-        cursor.execute (self._text[1:-1])
+        cursor.execute (self._content.get_data () [1:-1])
         result = cursor.fetchall ()
 
         # for all tuples in the result of the query
@@ -767,8 +792,9 @@ class SPSQuery (SPSCommand):
                 top = min (row, top)
                 bottom = max (row, bottom)
 
-                # write the index-th value of this tuple in this cell
-                # data [cell] = value[i]
+                # write the index-th value of this tuple in this cell. Note that
+                # in this case, the creation of the cell content preserves the
+                # type as it was stored in the database
                 data [cell] = SPSCellContent (value[i], get_type (value[i]))
 
             # update the range by sliding it in the given direction
