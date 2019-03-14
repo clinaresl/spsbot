@@ -77,6 +77,8 @@ class SPSParser :
         'RCURBRACK',
         'LPARENTHESIS',
         'RPARENTHESIS',
+        'LSQUAREBRACKET',
+        'RSQUAREBRACKET',
         'SEMICOLON',
         'COLON',
         'COMMA',
@@ -108,15 +110,17 @@ class SPSParser :
     # -------------------------------------------------------------------------
 
     # Regular expression rules for simple tokens
-    t_LCURBRACK  = r'\{'
-    t_RCURBRACK  = r'\}'
-    t_LPARENTHESIS = r'\('
-    t_RPARENTHESIS = r'\)'
-    t_SEMICOLON  = r';'
-    t_COLON      = r':'
-    t_PLUS       = r'\+'
-    t_COMMA      = r','
-    t_DOT        = r'\.'
+    t_LCURBRACK      = r'\{'
+    t_RCURBRACK      = r'\}'
+    t_LPARENTHESIS   = r'\('
+    t_RPARENTHESIS   = r'\)'
+    t_LSQUAREBRACKET = r'\['
+    t_RSQUAREBRACKET = r'\]'
+    t_SEMICOLON      = r';'
+    t_COLON          = r':'
+    t_PLUS           = r'\+'
+    t_COMMA          = r','
+    t_DOT            = r'\.'
 
     # Definitions of real numbers which intentionally do not match integer
     # numbers to avoid confussions with t_NUMBER. Note, in addition, that this
@@ -334,7 +338,9 @@ class SPSParser :
     # a region.
     def p_command (self, p):
         '''command : celldec content
-                   | celldec COLON celldec direction content'''
+                   | celldec attributes content
+                   | celldec COLON celldec direction content
+                   | celldec COLON celldec attributes direction content'''
 
         if len (p) == 3:
             
@@ -346,6 +352,16 @@ class SPSParser :
                                             spsstructs.SPSCellContent (p[2][2], p[2][3]),
                                             p[2][4])
                 
+        if len (p) == 4:
+            
+            if p[3][0] == 'Literal':
+                p[0] = spsstructs.SPSLiteral (p[3][1], (p[1],p[1]),
+                                              spsstructs.SPSCellContent (p[3][2], p[3][3], p[2]))
+            if p[3][0] == 'Query':
+                p[0] = spsstructs.SPSQuery (p[3][1], (p[1],p[1]),
+                                            spsstructs.SPSCellContent (p[3][2], p[3][3], p[2]),
+                                            p[3][4])
+                
         if len (p) == 6:
             
             if p[5][0] == 'Literal':
@@ -356,6 +372,17 @@ class SPSParser :
                 p[0] = spsstructs.SPSQuery (p[5][1], (p[1],p[3]),
                                             spsstructs.SPSCellContent (p[5][2], p[5][3]),
                                             p[5][4], p[4])
+
+        if len (p) == 7:
+            
+            if p[6][0] == 'Literal':
+                p[0] = spsstructs.SPSLiteral (p[6][1], (p[1],p[3]),
+                                              spsstructs.SPSCellContent (p[6][2], p[6][3], p[4]),
+                                              p[5])
+            if p[6][0] == 'Query':
+                p[0] = spsstructs.SPSQuery (p[6][1], (p[1],p[3]),
+                                            spsstructs.SPSCellContent (p[6][2], p[6][3], p[4]),
+                                            p[6][4], p[5])
 
     # cells can be given either explicitly, e.g., $H27 or with a variable such
     # as $query.personal_data.sw. Additionally, an offset might be applied if
@@ -373,6 +400,35 @@ class SPSParser :
         # given either explicitly or with a variable and an offset
         else:
             p[0] = spsstructs.SPSCellReference (p[1][1:], p[4], p[6])    
+
+    # attributes serve to set up the format of a cell or a range of cells
+    def p_attributes (self, p):
+        '''attributes : LSQUAREBRACKET attribute_list RSQUAREBRACKET'''
+
+        # a list of attributes is stored as an instance of SPSCellAttribute
+        # computed from a dictionary of pairs key/value
+        p[0] = spsstructs.SPSCellAttribute (p[2])
+
+    # attributes are given as a comma-separated list of attributes
+    def p_attribute_list (self, p):
+        '''attribute_list : attribute
+                          | attribute COMMA attribute_list'''
+
+        # the result is returned as a dictionary: If only one attribute is
+        # given, it is immediately returned. Otherwise, the dictionary is
+        # extended with the keys/values given in the list of attributes
+        if len (p) == 4:
+            p[1].update (p[3])
+
+        p[0] = p[1]
+
+    # a single attribute is given in the form <attribute> : <value>, both the
+    # attribute and the value specified as a string
+    def p_attribute (self, p):
+        '''attribute : ID COLON ID'''
+
+        # note that the result is returned as a dictionary
+        p [0] = { p[1] : p[3] }
 
     # contents can be either strings, literals or queries
     def p_content (self, p):

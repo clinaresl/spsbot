@@ -33,6 +33,7 @@ __version__  = '1.0'
 import pyexcel                  # reading/writing to various formats of spreadsheets
 import xlsxwriter               # writing to xlsx files
 
+import functools
 import math
 import re
 import sqlite3
@@ -388,6 +389,39 @@ class DynamicArray:
             
 
 # -----------------------------------------------------------------------------
+# SPSCellAttribute
+#
+# Definition of the attributes of an arbitrary cell
+# -----------------------------------------------------------------------------
+class SPSCellAttribute:
+    """Definition of the attributes of an arbitrary cell
+
+    """
+
+    def __init__ (self, attributes=None):
+        """The attributes of a cell are defined as a dictionary where the index is the
+           attribute for which its value is specified
+
+        """
+
+        self._attributes = attributes if attributes else {}
+
+    def __str__ (self):
+        """provides a human readable representation of this instance"""
+
+        output = "["
+
+        # now just simply return all values in the dictionary as a string in the
+        # form 'key : value'
+        output += functools.reduce (lambda x, y : x + ", " + y,
+                                    ["{0} : {1}".format (key, self._attributes [key])
+                                     for key in self._attributes.keys ()])
+        output += "]"
+
+        return output
+        
+
+# -----------------------------------------------------------------------------
 # SPSCellContent
 #
 # Definition of contents of an arbitrary cell
@@ -401,8 +435,8 @@ class SPSCellContent:
         """The contents of a cell are qualified by its data, its type, which should be
            restricted to one among: text, integer, real, formula, (i.e., those
            recognized from the database (but dates) and, additionally, formulae)
-           and its attributes which are free-form strings that should be parsed
-           by xlsxwriter given as a list, or None if none is given
+           and its attributes which should be given as an instance of
+           SPSCellAttribute if given
 
         """
 
@@ -413,6 +447,19 @@ class SPSCellContent:
         # and copy now the attributes
         (self._data, self._type, self._attributes) = (data, ctype, attributes)
 
+    def __str__ (self):
+        '''provides a human readable representation of the contents of this intance'''
+
+        if self._attributes:
+            output = "Contents '{0}' with type '{1}' and format '{2}'".format (self._data, self._type, self._attributes)
+        else:
+            output = "Contents '{0}' with type '{1}'".format (self._data, self._type)
+
+        if self._attributes:
+            output += "{0}".format (self._attributes)
+            
+        return output
+        
     def get_data (self):
         """ returns the contents of this cell"""
 
@@ -601,9 +648,20 @@ class SPSLiteral (SPSCommand):
     def __str__ (self):
         '''provides a human readable representation of the contents of this intance'''
 
+        output = "\t"
+        
         if self._name:
-            return "\tLiteral '{0}' with contents '{1}' in range {2} : {3}".format (self._name, self._content.get_data (), self._range[0], self._range[1])
-        return "\tExplicit literal with contents '{0}' in range {1} : {2}".format (self._content.get_data (), self._range[0], self._range[1])
+            output += "Literal '{0}'".format (self._name)
+        else:
+            output+= "Explicit Literal"
+
+        output += " with contents '{0}' in range {1} : {2}".format (self._content.get_data (), self._range[0], self._range[1])
+
+        if self._content._attributes:
+            output += " and attributes {0}".format (self._content._attributes)
+
+        return output
+    
 
     def execute (self, data, context):
         '''executes this literal updating the contents of the array given in 'data' and
@@ -628,7 +686,7 @@ class SPSLiteral (SPSCommand):
         # formula, then it might be necessary to evaluate its contents and to
         # perform substitutions
         if self._content.get_type () in ['text', 'formula']:
-        
+
             # now, perform all necessay substitutions. First, those where
             # variables appear along with an offset
             value = evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, value)
@@ -713,6 +771,12 @@ class SPSQuery (SPSCommand):
 
         '''
 
+        # first of all, make sure that the data given in the content is of type
+        # 'text'. This same thing could be done in the parser, but it seems much
+        # easier here
+        if content.get_type () != 'text':
+            raise TypeError (" The type of the following query is not of type 'text': {0}".format (self))
+        
         # create an instance invoking the constructor of the base class
         super (SPSQuery, self).__init__(name=name, crange=crange, ctype='query', content=content)
         self._dbref = dbref
@@ -721,9 +785,15 @@ class SPSQuery (SPSCommand):
     def __str__ (self):
         '''provides a human readable representation of the contents of this intance'''
 
+        output = "\tQuery '{0}' with contents '{1}' in range {2} : {3}".format (self._name, self._content.get_data (), self._range [0], self._range [1])
+
         if self._direction:
-            return "\tQuery '{0}' with contents '{1}' in range {2} : {3} with direction {4}".format (self._name, self._content.get_data (), self._range[0], self._range[1], self._direction)
-        return "\tQuery '{0}' with contents '{1}' in range {2} : {3}".format (self._name, self._content.get_data (), self._range[0], self._range[1])
+            output += " with direction {0}".format (self._direction)
+
+        if self._content._attributes:
+            output += " and attributes {0}".format (self._content._attributes)
+
+        return output
 
     def get_direction (self):
         '''return the direction of this command'''
@@ -795,7 +865,7 @@ class SPSQuery (SPSCommand):
                 # write the index-th value of this tuple in this cell. Note that
                 # in this case, the creation of the cell content preserves the
                 # type as it was stored in the database
-                data [cell] = SPSCellContent (value[i], get_type (value[i]))
+                data [cell] = SPSCellContent (value[i], get_type (value[i]), self._content._attributes)
 
             # update the range by sliding it in the given direction
             if self._direction == 'down':
@@ -1137,6 +1207,55 @@ class SPSBook:
         book.save_as (filename)
         
     
+    def write_to_xlsxwriter (self, filename, contents):
+        '''use xlsxwriter to create a spreadsheet with the given filename and the
+           specified contents. The contents consist of a dictionary where the
+           keys are the sheetname and the value consists of a list of lists,
+           each one containing the items in each row starting from row 1.
+
+           The contents of each cell are specified as instances of
+           SPSCellContent. 
+
+        '''
+
+        # create a book for this spreadsheet 
+        book = xlsxwriter.Workbook (filename)
+
+        # process the contents
+        for key, data in contents.items ():
+
+            # create a new spreadsheet with the name given in contents
+            sheet = book.add_worksheet (key)
+
+            # for each row for which we keep track of its index
+            for norow, row in zip (list (range (len (data))), data):
+
+                # and also, for each column for which we keep track of its index
+                for nocol, cell in zip (list (range (len (row))), row):
+                    if cell:
+
+                        # in case a format was specified for this cell, create a
+                        # format for it
+                        if cell._attributes:
+                            attrs = book.add_format (cell.get_attributes ()._attributes)
+                        else:
+                            attrs = {}
+                        
+                        # use the proper write_ command according to the type of
+                        # contents of this cell
+                        if cell.get_type () == 'text':
+                            sheet.write_string (norow, nocol, cell.get_data (), attrs)
+                        elif cell.get_type () in ['integer', 'real']:
+                            sheet.write_number (norow, nocol, cell.get_data (), attrs)
+                        elif cell.get_type () == 'formula':
+                            sheet.write_formula (norow, nocol, cell.get_data (), attrs)
+                        else:
+                            raise ValueError (" Unknown cell type")
+
+        # close the workbook
+        book.close ()
+
+        
     def execute (self, dbname = None, spsname = None, sheetname = None, override=False):
         '''executes all commands in the registry of all spreadsheets in this
            book effectively inserting data into the given
@@ -1190,9 +1309,9 @@ class SPSBook:
         for spreadsheet in files.keys ():
 
             # if this is an excel 2007 or xlsx file then use xlswriter
-            if re.match (".*\.xlsx", spreadsheet):
+            if re.match (".*\.xls[x]?", spreadsheet):
 
-                print (" Support for xlswriter not developed yet!")
+                self.write_to_xlsxwriter (spreadsheet, files[spreadsheet])
 
             else:
 
