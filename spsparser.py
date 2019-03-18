@@ -30,6 +30,7 @@ __version__  = '1.0'
 
 # imports
 # -----------------------------------------------------------------------------
+import datetime
 import re                               # match
 import string                           # split
 import sys                              # exit
@@ -70,6 +71,8 @@ class SPSParser :
 
     # List of token names. This is always required
     tokens = (
+        'DATEEXP',
+        'DATETIMEEXP',
         'REAL',
         'NUMBER',
         'STRING',
@@ -122,6 +125,44 @@ class SPSParser :
     t_COMMA          = r','
     t_DOT            = r'\.'
 
+    # datetimes are defined as three groups of digits separated by either
+    # slashes or dashes along with the time given explicitly in the format
+    # HH:MM:SS or, alternatively, by using the keyword datetime.now. Note that
+    # the first and last group are allowed to have up to four different digits,
+    # this is illegal, clearly, but it allows the definition of dates where the
+    # year is given either first or last
+    def t_DATETIMEEXP (self, t):
+        r'\d{1,4}[/-]\d{1,2}[/-]\d{1,4}|datetime\.now'
+
+        # is it one of the forms *.now?
+        if re.match (r'datetime\.now', str (t.value)):
+            t.value = datetime.datetime.now ()
+        
+        # otherwise, cast the string to a datetime
+        else:
+            t.value = spsstructs.string_to_datetime (t.value)
+
+        return t    
+    
+    # dates are defined as three groups of digits separated by either slashes or
+    # dashes or, alternatively, by using the keyword date.now. Note that the
+    # first and last group are allowed to have up to four different digits, this
+    # is illegal, clearly, but it allows the definition of dates where the year
+    # is given either first or last
+    def t_DATEEXP (self, t):
+        r'\d{1,4}[/-]\d{1,2}[/-]\d{1,4}|date\.now'
+
+        # is it one of the forms *.now?
+        if re.match (r'date\.now', str (t.value)):
+            t.value = datetime.date.today ()
+        
+        # check if the format used was YYYY, mm, dd with either dashes or
+        # slashes
+        else:
+            t.value = spsstructs.string_to_date (t.value)
+
+        return t
+    
     # Definitions of real numbers which intentionally do not match integer
     # numbers to avoid confussions with t_NUMBER. Note, in addition, that this
     # token precedes the NUMBER
@@ -230,10 +271,12 @@ class SPSParser :
 
         pass
 
-    # the declaration of a literal consists just of the assignment of a string
-    # to an identifier
+    # the declaration of a literal consists just of the assignment of an
+    # instance of the basic types to an identifier
     def p_literaldec (self, p):
-        '''literaldec : LITERAL ID REAL
+        '''literaldec : LITERAL ID DATETIMEEXP
+                      | LITERAL ID DATEEXP
+                      | LITERAL ID REAL
                       | LITERAL ID NUMBER
                       | LITERAL ID STRING'''
 
@@ -248,12 +291,14 @@ class SPSParser :
             
             # if the literal is (either) a real or integer number then store it as
             # is
-            if isinstance (p[3], int) or isinstance (p[3], float):
-                self._literal_table [p[2]] = p[3]
-
-            # and in case it is a string just remove the double quotes
+            # in case it is a string, then remove the quotes
             if isinstance (p[3], str):
                 self._literal_table [p[2]] = p[3][1:-1]
+
+            else:
+                # in any other case (integer, real, datetime or date) just store
+                # it as given
+                self._literal_table [p[2]] = p[3]
 
     # likewise, the declaration of a query consists of the assignment of a query
     # to an identifier
@@ -422,17 +467,25 @@ class SPSParser :
 
         p[0] = p[1]
 
-    # a single attribute is given in the form <attribute> : <value>, both the
-    # attribute and the value specified as a string
+    # a single attribute is given in the form <attribute> : <value>, where the
+    # attribute is characterized as an id, but the value can contain different
+    # characters
     def p_attribute (self, p):
-        '''attribute : ID COLON ID'''
+        '''attribute : ID COLON NUMBER
+                     | ID COLON STRING'''
 
-        # note that the result is returned as a dictionary
-        p [0] = { p[1] : p[3] }
-
-    # contents can be either strings, literals or queries
+        # in case it is a string, remove the quotes
+        if isinstance (p[3], str):
+            p[0] = { p[1] : p[3][1:-1] }
+        else:
+            p[0] = { p[1] : p[3] }
+        
+    # contents can be either instances of the basic types (integers, reals,
+    # strings, datetimes or dates), literals or queries
     def p_content (self, p):
-        '''content : REAL SEMICOLON
+        '''content : DATETIMEEXP SEMICOLON
+                   | DATEEXP SEMICOLON
+                   | REAL SEMICOLON
                    | NUMBER SEMICOLON
                    | STRING SEMICOLON
                    | LITERAL DOT ID SEMICOLON
@@ -447,15 +500,20 @@ class SPSParser :
         #
         #    Name is given only with named literals, of course
         #
-        #    Type is either 'real', 'integer', 'text', etc., i.e., those
-        #    recognized by sqlite3 and, additionally, 'formula's
+        #    Type is either 'datetime', 'date', 'real', 'integer', 'text' and
+        #    'formula' i.e., those recognized by sqlite3 and, additionally,
+        #    'formula's
         #
         # In case it refers to a query, it also adds a fifth value with the
         # database to use if any is provided
         if len (p) == 3:
 
-            # now, distinguish among the three different unnamed literals that
-            # can be used
+            # now, distinguish among the different unnamed literals that can be
+            # used
+            if isinstance (p[1], datetime.datetime):
+                p [0] = ('Literal', None, p[1], 'datetime')
+            if isinstance (p[1], datetime.date):
+                p [0] = ('Literal', None, p[1], 'date')
             if isinstance (p[1], float):
                 p [0] = ('Literal', None, p[1], 'real')
             if isinstance (p[1], int):

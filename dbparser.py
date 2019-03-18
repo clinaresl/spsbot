@@ -46,6 +46,7 @@ class DBParser :
     # reserved words
     reserved_words = {
         'using'     : 'USING',
+        'date'      : 'DATE',
         'integer'   : 'INTEGER',
         'real'      : 'REAL',
         'text'      : 'TEXT',
@@ -56,6 +57,7 @@ class DBParser :
 
     # List of token names. This is always required
     tokens = (
+        'DATEEXP',
         'NUMBER',
         'STRING',
         'LCURBRACK',
@@ -90,6 +92,13 @@ class DBParser :
     t_COLON      = r':'
     t_COMMA      = r','
 
+    # dates are defined as three groups of digits separated by either slashes or
+    # dashes. Note that the first and last group are allowed to have up to four
+    # different digits, this is illegal, clearly, but it allows the definition
+    # of dates where the year is given either first or last
+    def t_DATEEXP (self, t):
+        r'\d{1,4}[/-]\d{1,2}[/-]\d{1,4}'
+    
     # Definition of both integer and real numbers
     def t_NUMBER(self, t):
         r'(([\+-]?\d*\.\d+)(E[\+-]?\d+)?|([\+-]?\d+E[\+-]?\d+))|[\+-]?\d+'
@@ -201,7 +210,7 @@ class DBParser :
         if len (p) == 5:
 
             # if the type was given but not an action
-            if p[3] in ["integer", "real", "text"]:
+            if p[3] in ["integer", "real", "text", "date"]:
                 p[0] = dbstructs.DBColumn (p[1], p[2], p[3], dbstructs.DBAction ('None'))
 
             # otherwise, if an action is given (but not its type)
@@ -230,7 +239,8 @@ class DBParser :
             p[0] = structs.Range ([p[1][1:], p[3][1:]])
             
     def p_type (self, p):
-        '''type : INTEGER
+        '''type : DATE
+                | INTEGER
                 | REAL
                 | TEXT'''
 
@@ -261,8 +271,11 @@ class DBParser :
             # then create an action with both fields
             p[0] = dbstructs.DBAction (p[1], p[3])
 
+    # a default value can be given as a number (either integer or real), a date,
+    # or a string
     def p_default (self, p):
-        '''default : NUMBER
+        '''default : DATEEXP
+                   | NUMBER
                    | STRING'''
 
         p[0] = p[1]

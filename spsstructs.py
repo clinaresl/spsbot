@@ -33,6 +33,7 @@ __version__  = '1.0'
 import pyexcel                  # reading/writing to various formats of spreadsheets
 import xlsxwriter               # writing to xlsx files
 
+import datetime
 import functools
 import math
 import re
@@ -44,7 +45,211 @@ import structs
 # functions
 # -----------------------------------------------------------------------------
 
+# -----------------------------------------------------------------------------
+# string_to_datetime
+#
+# casts the given value which should be a string to an instace of datetime
+# -----------------------------------------------------------------------------
+def string_to_datetime (value):
+    '''casts the given value which should be a string to an instace of datetime
 
+    '''
+
+    # check if the format used was YYYY, mm, dd with either dashes or
+    # slashes
+    if (re.match (r'\d{4}-\d{1,2}-\d{1,2}', str (value))):
+        return datetime.datetime.strptime (str (value), "%Y-%m-%d")
+    elif (re.match (r'\d{4}/\d{1,2}/\d{1,2}', str (value))):
+        return datetime.datetime.strptime (str (value), "%Y/%m/%d")
+
+    # check if the format used was dd, mm, YYY with either dashes or slashes
+    elif (re.match (r'\d{1,2}-\d{1,2}-\d{4}', str (value))):
+        return datetime.datetime.strptime (str (value), "%d-%m-%Y")
+    elif (re.match (r'\d{1,2}/\d{1,2}/\d{4}', str (value))):
+        return datetime.datetime.strptime (str (value), "%d/%m/%Y")
+    
+
+# -----------------------------------------------------------------------------
+# string_to_date
+#
+# casts the given value which should be a string to an instace of date
+# -----------------------------------------------------------------------------
+def string_to_date (value):
+    '''casts the given value which should be a string to an instace of date
+
+    '''
+
+    m = (re.match (r'(\d{4})-(\d{1,2})-(\d{1,2})', str (value)))
+    if m:
+        return datetime.date (int (m.groups ()[0]), int (m.groups ()[1]), int (m.groups ()[2]))
+
+    else:
+        m = (re.match (r'(\d{4})/(\d{1,2})/(\d{1,2})', str (value)))
+        if m:
+            return datetime.date (int (m.groups ()[0]), int (m.groups ()[1]), int (m.groups ()[2]))
+
+        else:
+            m = (re.match (r'(\d{1,2})-(\d{1,2})-(\d{4})', str (value)))
+            if m:
+                return datetime.date (int (m.groups ()[2]), int (m.groups ()[1]), int (m.groups ()[0]))
+
+            else:
+                m = (re.match (r'(\d{1,2})/(\d{1,2})/(\d{4})', str (value)))
+                if m:
+                    return datetime.date (int (m.groups ()[2]), int (m.groups ()[1]), int (m.groups ()[0]))
+
+                else:
+                    raise TypeError (" Incorrect date expression!")
+    
+
+# -----------------------------------------------------------------------------
+# cast_value
+#
+# casts the given value to the specified type which should be one among those
+# acknowledged by spsbot: text, integer, real, date, datetime and formula. All
+# casts are supposed to be sound and complete, so that it should be possible to
+# retrieve the original value after de-casting it, .e.g.,
+# cast<X>(cast<Y>(value)) = value if X is the original type of the value, when
+# possible
+#
+# It is assumed that the conversion is feasible
+# -----------------------------------------------------------------------------
+def cast_value (value, ctype):
+    '''casts the given value to the specified type which should be one among those
+       acknowledged by spsbot: text, integer, real, date, datetime and
+       formula. All casts are supposed to be sound and complete, so that it
+       should be possible to retrieve the original value after de-casting it,
+       .e.g., cast<X>(cast<Y>(value)) = value if X is the original type of the
+       value, when possible
+
+       It is assumed that the conversion is feasible
+
+    '''
+
+    # it is expected that the only input (Python) types are: str, int, float,
+    # datetime.datetime and datetime.date
+
+    # This function does not warn the user if the input (c)type is of an unknown
+    # type!!
+    
+    # -- string
+    if ctype == "text":
+
+        # it is only necessary here to take a word of caution with dates and
+        # datetimes which should be explicitly formatted as strings
+        if isinstance (value, datetime.date):
+            return datetime.date.strftime (value, "%d-%m-%Y")
+        elif isinstance (value, datetime.datetime):
+            return datetime.datetime.strftime (value, "%d-%m-%Y %H:%M:%S")
+        else:
+
+            # integers, reals, strings and formulas can be directly casted to
+            # strings
+            return str (value)
+
+    # -- integer
+    elif ctype == "integer":
+
+        # again, we only have to take care of dates/times
+        if isinstance (value, datetime.datetime):
+
+            # return the number of seconds elapsed since January, 1, 1970, the
+            # year I was bornt! :)
+            return int ((value-datetime.datetime (1970,1,1)).total_seconds ())
+            
+        elif isinstance (value, datetime.date):
+
+            # in this case we return the proleptic Gregorian ordinal of the
+            # date, where January 1 of year 1 has ordinal 1
+            return value.toordinal ()
+        else:
+
+            # we plainly assume here that the conversion is feasible. This is
+            # imposible for formulas and it might be problematic for many
+            # different strings
+            if isinstance (value, str) and value[0]=='=':
+                raise TypeError ("It is not possible to cast a formula into an integer")
+            return int (value)
+
+    # -- real
+    elif ctype == "real":
+
+        # we proceed much in the same vain as in the integer case
+        if isinstance (value, datetime.datetime):
+            return (value-datetime.datetime (1970,1,1)).total_seconds ()
+            
+        elif isinstance (value, datetime.date):
+            return float (value.toordinal ())
+        
+        else:
+            if isinstance (value, str) and value[0]=='=':
+                raise TypeError ("It is not possible to cast a formula into a real")
+            return float (value)
+
+    # -- formula
+    elif ctype == "formula":
+
+        # if we are given a number, either an integer or a real, then just
+        # simply cast it into a string and add '='
+        if isinstance (value, int) or isinstance (value, float):
+            return '=' + str (value)
+
+        # in case we are given a string, we cast it by adding the prefix '='
+        # unless it already starts with the equality sign
+        if isinstance (value, str):
+            return '=' + value if value[0]!='=' else value
+
+        # in case we are given either a datetime or a date, we want it to
+        # preserve its value, so we use the function DATEVALUE over the string
+        # which results of casting the value into a string
+        if isinstance (value, datetime.datetime) or isinstance (value, datetime.date):
+            return '=' + cast_value (value, "text")
+    
+    # -- datetime
+    elif ctype == "datetime":
+
+        # if we are given either an integer or a real, this should be
+        # interpreted as the number of seconds elapsed since January, 1, 1970.
+        if isinstance (value, int) or isinstance (value, float):
+            return datetime.datetime (1970,1,1) + datetime.timedelta (seconds = value)
+
+        # if we are given a string, we cast it as we do with the parser
+        if isinstance (value, str):
+
+            # if we are given a formula, then there is nothing to do:
+            if value[0]=='=':
+                raise TypeError ("It is not possible to cast a formula into a datetime")
+            return string_to_datetime (value)
+
+        # if we are given a date
+        if isinstance (value, date) or isinstance (value, datetime.datetime):
+            return datetime.dateime (value.year, value.month, value.day)
+
+    # -- date
+    elif ctype == "date":
+
+        # if we are given either an integer or a real, this should be
+        # interpreted as the the proleptic Gregorian ordinal of the date, where
+        # January 1 of year 1 has ordinal 1
+        if isinstance (value, int) or isinstance (value, float):
+            return datetime.date.fromordinal (int (value))
+
+        # if we are given a string, then we cast it as we do with the parser
+        # unless we are given a formula
+        if isinstance (value, str):
+            if value[0]=='=':
+                raise TypeError ("It is not possible to cast a formula into a datetime")
+            return string_to_date (value)
+
+        # if we are given a datetime, we just simply disregard the time
+        if isinstance (value, datetime.date) or isinstance (value, datetime.datetime):
+            return datetime.date (value.year, value.month, value.day)
+
+    # -- unknown!
+    else:
+        raise TypeError (" Unknown target type '{0}'".format (ctype))
+    
+    
 # -----------------------------------------------------------------------------
 # get_type
 #
@@ -52,13 +257,29 @@ import structs
 # the type cannot be derived, it returns 'unknown'
 # -----------------------------------------------------------------------------
 def get_type (content):
-    '''returns the type of its argument, one among [text, integer, real,
+    '''returns the type of its argument, one among [text, integer, real, date,
     formula]. If the type cannot be derived, it returns 'unknown'
 
     '''
 
     if isinstance (content, str):
-        return "formula" if content[0] == '=' else "text"
+
+        # SQLite does not have specific types for storing
+        # dates/timedates/times. Instead, they can be stored as a string,
+        # integer or real. We use, in particular the string format for them and
+        # hence we follow the ISO8601 which stores them as strings in the format
+        # "YYYY-MM-DD HH:MM:SS"
+        if re.match (r'\d{1,4}-\d{1,2}-\d{1,2}', content):
+            return "date"
+        elif content [0] == '=':
+
+            # formulas are recognized because the first character is '='
+            return "formula"
+        else:
+
+            # if the format of the string is unknown, then it is assumed to be
+            # plain text
+            return "text"
     elif isinstance (content, float):
         return "real"
     elif isinstance (content, int):
@@ -433,15 +654,15 @@ class SPSCellContent:
 
     def __init__ (self, data, ctype, attributes=None):
         """The contents of a cell are qualified by its data, its type, which should be
-           restricted to one among: text, integer, real, formula, (i.e., those
-           recognized from the database (but dates) and, additionally, formulae)
-           and its attributes which should be given as an instance of
-           SPSCellAttribute if given
+           restricted to one among: datetime, text, integer, real, formula,
+           (i.e., those recognized from the database and, additionally,
+           formulae) and its attributes which should be given as an instance of
+           SPSCellAttribute if given. If a formula is given
 
         """
 
         # verify that the given type is known, and reject unknown types
-        if ctype not in ['text', 'integer', 'real', 'text', 'formula']:
+        if ctype not in ['datetime', 'date', 'text', 'integer', 'real', 'formula']:
             raise ValueError (" The cell content type '{0}' is not known!".format (ctype))
 
         # and copy now the attributes
@@ -862,10 +1083,21 @@ class SPSQuery (SPSCommand):
                 top = min (row, top)
                 bottom = max (row, bottom)
 
-                # write the index-th value of this tuple in this cell. Note that
-                # in this case, the creation of the cell content preserves the
-                # type as it was stored in the database
-                data [cell] = SPSCellContent (value[i], get_type (value[i]), self._content._attributes)
+                # write the index-th value of this tuple in this cell. While it
+                # might be tempting to preserve the type of this content from
+                # the schema of the database:
+                #
+                #   1. A column of one specific type in sqlite3 can hold values
+                #   of different types
+                #   2. The basic types acknowledged by spsbot and those
+                #   acknoledged by sqlite3 are not the same. For instance, we
+                #   might one to store formulas in a sqlite3 database of type
+                #   "text"
+                #
+                # Thus, we derive the type from the content and we explicitly
+                # cast it into it
+                tvalue = cast_value (value[i], get_type (value[i]))
+                data [cell] = SPSCellContent (tvalue, get_type (value[i]), self._content._attributes)
 
             # update the range by sliding it in the given direction
             if self._direction == 'down':
@@ -1218,8 +1450,11 @@ class SPSBook:
 
         '''
 
-        # create a book for this spreadsheet 
-        book = xlsxwriter.Workbook (filename)
+        # create a book for this spreadsheet. Note that datetime objects are
+        # given a default format. If not, a number is shown instead. Of course,
+        # the default date format can be overriden by the user by defining an
+        # attribute
+        book = xlsxwriter.Workbook (filename, {'default_date_format' : 'dd/mm/yy'})
 
         # process the contents
         for key, data in contents.items ():
@@ -1247,10 +1482,14 @@ class SPSBook:
                             sheet.write_string (norow, nocol, cell.get_data (), attrs)
                         elif cell.get_type () in ['integer', 'real']:
                             sheet.write_number (norow, nocol, cell.get_data (), attrs)
+                        elif cell.get_type () in ['datetime', 'date']:
+                            if 'num_format' not in cell.get_attributes ()._attributes:
+                                attrs.set_num_format ('dd/mm/yyyy')
+                            sheet.write_datetime (norow, nocol, cell.get_data (), attrs)
                         elif cell.get_type () == 'formula':
                             sheet.write_formula (norow, nocol, cell.get_data (), attrs)
                         else:
-                            raise ValueError (" Unknown cell type")
+                            raise ValueError (" Unknown cell type: {0}".format (cell.get_type ()))
 
         # close the workbook
         book.close ()

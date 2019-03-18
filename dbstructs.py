@@ -231,7 +231,8 @@ class DBColumn:
         self._data = list ()
 
     def __eq__ (self, other):
-        '''a column is equal to another if and only if they have the same name in spite of all the other attributes'''
+        '''a column is equal to another if and only if they have the same name in spite
+           of all the other attributes'''
 
         return self._name == other._name
         
@@ -335,7 +336,7 @@ class DBColumn:
                         data = int (data)
                     elif self._type == 'real':
                         data = float (data)
-                    elif self._type == 'text':
+                    elif self._type == 'text' or self._type == 'date':
                         data = str (data)
 
                 except:
