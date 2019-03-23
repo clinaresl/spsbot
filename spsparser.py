@@ -127,12 +127,13 @@ class SPSParser :
 
     # datetimes are defined as three groups of digits separated by either
     # slashes or dashes along with the time given explicitly in the format
-    # HH:MM:SS or, alternatively, by using the keyword datetime.now. Note that
-    # the first and last group are allowed to have up to four different digits,
-    # this is illegal, clearly, but it allows the definition of dates where the
-    # year is given either first or last
+    # HH:MM:SS(.mmmmmm) where mmm are microseconds or, alternatively, by using
+    # the keyword datetime.now. Note that the first and last group of the date
+    # are allowed to have up to four different digits, this is illegal, clearly,
+    # but it allows the definition of dates where the year is given either first
+    # or last
     def t_DATETIMEEXP (self, t):
-        r'\d{1,4}[/-]\d{1,2}[/-]\d{1,4}|datetime\.now'
+        r'\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\s+\d{1,2}:\d{1,2}:\d{1,2}(\.\d{1,6})?|datetime\.now'
 
         # is it one of the forms *.now?
         if re.match (r'datetime\.now', str (t.value)):

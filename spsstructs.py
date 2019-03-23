@@ -48,25 +48,50 @@ import structs
 # -----------------------------------------------------------------------------
 # string_to_datetime
 #
-# casts the given value which should be a string to an instace of datetime
+# casts the given value which should be a string to an instace of datetime. The
+# format of the string should give first the date and then the time:
+#
+# 1. The date could be given in any of the format YYYY-MM-DD or DD-MM-YY where
+#    dashes could be substituted by slahses
+#
+# 2. The time should be given in the format HH:MM:SS where microseconds can be
+#    specified as well after the seconds preceded by a dot
 # -----------------------------------------------------------------------------
 def string_to_datetime (value):
-    '''casts the given value which should be a string to an instace of datetime
+    '''casts the given value which should be a string to an instace of datetime. The
+       format of the string should give first the date and then the time:
+
+       1. The date could be given in any of the format YYYY-MM-DD or DD-MM-YY where
+          dashes could be substituted by slahses
+
+       2. The time should be given in the format HH:MM:SS where microseconds can be
+          specified as well after the seconds preceded by a dot
 
     '''
 
     # check if the format used was YYYY, mm, dd with either dashes or
-    # slashes
-    if (re.match (r'\d{4}-\d{1,2}-\d{1,2}', str (value))):
-        return datetime.datetime.strptime (str (value), "%Y-%m-%d")
-    elif (re.match (r'\d{4}/\d{1,2}/\d{1,2}', str (value))):
-        return datetime.datetime.strptime (str (value), "%Y/%m/%d")
+    # slashes. When processing the time, verify whether microseconds were given
+    # or not
+    if re.match (r'\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}', str (value)):
+        if re.match (r'\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str (value)):
+            return datetime.datetime.strptime (str (value), "%Y-%m-%d %H:%M:%S.%f")
+        return datetime.datetime.strptime (str (value), "%Y-%m-%d %H:%M:%S")
+    elif re.match (r'\d{4}/\d{1,2}/\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}', str (value)):
+        if re.match (r'\d{4}/\d{1,2}/\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str (value)):
+            return datetime.datetime.strptime (str (value), "%Y/%m/%d %H:%M:%S.%f")
+        return datetime.datetime.strptime (str (value), "%Y/%m/%d %H:%M:%S")
 
-    # check if the format used was dd, mm, YYY with either dashes or slashes
-    elif (re.match (r'\d{1,2}-\d{1,2}-\d{4}', str (value))):
-        return datetime.datetime.strptime (str (value), "%d-%m-%Y")
-    elif (re.match (r'\d{1,2}/\d{1,2}/\d{4}', str (value))):
-        return datetime.datetime.strptime (str (value), "%d/%m/%Y")
+    # check if the format used was dd, mm, YYY with either dashes or
+    # slashes. When processing the time, verify whether microseconds were given
+    # or not
+    elif re.match (r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}', str (value)):
+        if re.match (r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str (value)):
+            return datetime.datetime.strptime (str (value, "%d-%m-%Y %H:%M:%S.%f"))
+        return datetime.datetime.strptime (str (value), "%d-%m-%Y %H:%M:%S")
+    elif re.match (r'\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}', str (value)):
+        if re.match (r'\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str (value)):
+            return datetime.datetime.strptime (str (value), "%d/%m/%Y %H:%M:%S.%f")
+        return datetime.datetime.strptime (str (value), "%d/%m/%Y %H:%M:%S")
     
 
 # -----------------------------------------------------------------------------
@@ -253,12 +278,12 @@ def cast_value (value, ctype):
 # -----------------------------------------------------------------------------
 # get_type
 #
-# returns the type of its argument, one among [text, integer, real, formula]. If
-# the type cannot be derived, it returns 'unknown'
+# returns the type of its argument, one among [text, integer, real, date,
+# datetime, formula]. If the type cannot be derived, it returns 'unknown'
 # -----------------------------------------------------------------------------
 def get_type (content):
     '''returns the type of its argument, one among [text, integer, real, date,
-    formula]. If the type cannot be derived, it returns 'unknown'
+    datetime, formula]. If the type cannot be derived, it returns 'unknown'
 
     '''
 
@@ -269,7 +294,11 @@ def get_type (content):
         # integer or real. We use, in particular the string format for them and
         # hence we follow the ISO8601 which stores them as strings in the format
         # "YYYY-MM-DD HH:MM:SS"
-        if re.match (r'\d{1,4}-\d{1,2}-\d{1,2}', content):
+
+        # Check datetimes before dates as the former can be matched as the second
+        if re.match (r'\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\s+\d{1,2}:\d{1,2}:\d{1,2}(\.\d{1,6})?', content):
+            return "datetime"
+        elif re.match (r'\d{1,4}-\d{1,2}-\d{1,2}', content):
             return "date"
         elif content [0] == '=':
 
@@ -654,8 +683,8 @@ class SPSCellContent:
 
     def __init__ (self, data, ctype, attributes=None):
         """The contents of a cell are qualified by its data, its type, which should be
-           restricted to one among: datetime, text, integer, real, formula,
-           (i.e., those recognized from the database and, additionally,
+           restricted to one among: datetime, date, text, integer, real,
+           formula, (i.e., those recognized from the database and, additionally,
            formulae) and its attributes which should be given as an instance of
            SPSCellAttribute if given. If a formula is given
 
@@ -1450,11 +1479,8 @@ class SPSBook:
 
         '''
 
-        # create a book for this spreadsheet. Note that datetime objects are
-        # given a default format. If not, a number is shown instead. Of course,
-        # the default date format can be overriden by the user by defining an
-        # attribute
-        book = xlsxwriter.Workbook (filename, {'default_date_format' : 'dd/mm/yy'})
+        # create a book for this spreadsheet
+        book = xlsxwriter.Workbook (filename)
 
         # process the contents
         for key, data in contents.items ():
@@ -1469,12 +1495,14 @@ class SPSBook:
                 for nocol, cell in zip (list (range (len (row))), row):
                     if cell:
 
+                        # print (" Processing {0}".format (cell))
+                        
                         # in case a format was specified for this cell, create a
-                        # format for it
+                        # format for it. Otherwise, leave it empty!!
                         if cell._attributes:
                             attrs = book.add_format (cell.get_attributes ()._attributes)
                         else:
-                            attrs = {}
+                            attrs = book.add_format ()
                         
                         # use the proper write_ command according to the type of
                         # contents of this cell
@@ -1483,8 +1511,18 @@ class SPSBook:
                         elif cell.get_type () in ['integer', 'real']:
                             sheet.write_number (norow, nocol, cell.get_data (), attrs)
                         elif cell.get_type () in ['datetime', 'date']:
-                            if 'num_format' not in cell.get_attributes ()._attributes:
-                                attrs.set_num_format ('dd/mm/yyyy')
+
+                            # date/time formats can be shown in a variety of
+                            # ways. In case the user did not provide a specific
+                            # format, one is assumed by default
+                            if not cell.get_attributes () or \
+                               'num_format' not in cell.get_attributes ()._attributes:
+
+                                if cell.get_type () == 'date':
+                                    attrs.set_num_format ('DD-MM-YYYY')
+                                if cell.get_type () == 'datetime':
+                                    attrs.set_num_format ('DD-MM-YYYY HH:MM:SS')
+
                             sheet.write_datetime (norow, nocol, cell.get_data (), attrs)
                         elif cell.get_type () == 'formula':
                             sheet.write_formula (norow, nocol, cell.get_data (), attrs)

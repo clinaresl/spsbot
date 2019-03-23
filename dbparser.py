@@ -47,6 +47,7 @@ class DBParser :
     reserved_words = {
         'using'     : 'USING',
         'date'      : 'DATE',
+        'datetime'  : 'DATETIME',
         'integer'   : 'INTEGER',
         'real'      : 'REAL',
         'text'      : 'TEXT',
@@ -57,6 +58,7 @@ class DBParser :
 
     # List of token names. This is always required
     tokens = (
+        'DATETIMEEXP',
         'DATEEXP',
         'NUMBER',
         'STRING',
@@ -92,13 +94,26 @@ class DBParser :
     t_COLON      = r':'
     t_COMMA      = r','
 
+    # datetimes are defined as three groups of digits separated by either
+    # slashes or dashes along with the time given explicitly in the format
+    # HH:MM:SS(.mmmmmm) where mmm are microseconds. Note that the first and last
+    # group of the date are allowed to have up to four different digits, this is
+    # illegal, clearly, but it allows the definition of dates where the year is
+    # given either first or last
+    def t_DATETIMEEXP (self, t):
+        r'\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\s+\d{1,2}:\d{1,2}:\d{1,2}(\.\d{1,6})?'
+
+        return t
+    
     # dates are defined as three groups of digits separated by either slashes or
     # dashes. Note that the first and last group are allowed to have up to four
     # different digits, this is illegal, clearly, but it allows the definition
     # of dates where the year is given either first or last
     def t_DATEEXP (self, t):
         r'\d{1,4}[/-]\d{1,2}[/-]\d{1,4}'
-    
+
+        return t
+        
     # Definition of both integer and real numbers
     def t_NUMBER(self, t):
         r'(([\+-]?\d*\.\d+)(E[\+-]?\d+)?|([\+-]?\d+E[\+-]?\d+))|[\+-]?\d+'
@@ -210,7 +225,7 @@ class DBParser :
         if len (p) == 5:
 
             # if the type was given but not an action
-            if p[3] in ["integer", "real", "text", "date"]:
+            if p[3] in ["integer", "real", "text", "datetime", "date"]:
                 p[0] = dbstructs.DBColumn (p[1], p[2], p[3], dbstructs.DBAction ('None'))
 
             # otherwise, if an action is given (but not its type)
@@ -237,9 +252,12 @@ class DBParser :
             p[0] = structs.Range ([p[1][1:], p[1][1:]])
         else:
             p[0] = structs.Range ([p[1][1:], p[3][1:]])
-            
+
+    # note that the only allowed types are numbers (either integers or
+    # floating-point numbers), strings and time specifications
     def p_type (self, p):
-        '''type : DATE
+        '''type : DATETIME
+                | DATE
                 | INTEGER
                 | REAL
                 | TEXT'''
@@ -271,10 +289,11 @@ class DBParser :
             # then create an action with both fields
             p[0] = dbstructs.DBAction (p[1], p[3])
 
-    # a default value can be given as a number (either integer or real), a date,
-    # or a string
+    # a default value can be given as a number (either integer or real), a
+    # datetime, a date, or a string
     def p_default (self, p):
-        '''default : DATEEXP
+        '''default : DATETIMEEXP
+                   | DATEEXP
                    | NUMBER
                    | STRING'''
 
