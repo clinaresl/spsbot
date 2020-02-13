@@ -1,45 +1,50 @@
-**Edit a file, create a new file, and clone from Bitbucket in under 2 minutes**
+# Introduction #
 
-When you're done, you can delete the content in this README and update the file with details for others getting started with your repository.
+``spsbot`` is a Python package that automates the population of a
+spreadsheet/sqlite database from data extracted from a sqlite
+database/spreadsheet. To this end, it comes with two Python scripts `sps2db.py`
+and `db2sps.py`.
 
-*We recommend that you open this README in another tab as you perform the tasks below. You can [watch our video](https://youtu.be/0ocf7u76WSo) for a full demo of all the steps in this tutorial. Open the video in a new tab to avoid leaving Bitbucket.*
+Both programs are driven by a configuration file which specifies what data
+should be extracted and how to store it in the designated target.
 
----
+While this software acknowledges a wide variety of spreadsheet formats
+(including `csv`, `ods`, `xls`, `xlsx`, etc.), only sqlite3 databases can be
+used.
 
-## Edit a file
 
-You’ll start by editing this README file to learn how to edit a file in Bitbucket.
+# Installation #
 
-1. Click **Source** on the left side.
-2. Click the README.md link from the list of files.
-3. Click the **Edit** button.
-4. Delete the following text: *Delete this line to make a change to the README from Bitbucket.*
-5. After making your change, click **Commit** and then **Commit** again in the dialog. The commit page will open and you’ll see the change you just made.
-6. Go back to the **Source** page.
+Download the software cloning the git repository with the following command:
 
----
+    $ git clone https://github.com/clinaresl/spsbot.git
 
-## Create a file
+a directory called `spsbot` will be automatically created. Go to that directory
+and execute the script `setup.py` as indicated below:
 
-Next, you’ll add a new file to this repository.
+    $ cd spsbot
+    $ sudo python3 ./setup.py install
 
-1. Click the **New file** button at the top of the **Source** page.
-2. Give the file a filename of **contributors.txt**.
-3. Enter your name in the empty file space.
-4. Click **Commit** and then **Commit** again in the dialog.
-5. Go back to the **Source** page.
+In case this software is being reinstalled, make sure to add `--force`
+to overwrite the previous package.
 
-Before you move on, go ahead and explore the repository. You've already seen the **Source** page, but check out the **Commits**, **Branches**, and **Settings** pages.
 
----
+# License #
 
-## Clone a repository
+spsbot is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version.
 
-Use these steps to clone from SourceTree, our client for using the repository command-line free. Cloning allows you to work on your files locally. If you don't yet have SourceTree, [download and install first](https://www.sourcetreeapp.com/). If you prefer to clone from the command line, see [Clone a repository](https://confluence.atlassian.com/x/4whODQ).
+spsbot is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+for more details.
 
-1. You’ll see the clone button under the **Source** heading. Click that button.
-2. Now click **Check out in SourceTree**. You may need to create a SourceTree account or log in.
-3. When you see the **Clone New** dialog in SourceTree, update the destination path and name if you’d like to and then click **Clone**.
-4. Open the directory you just created to see your repository’s files.
+You should have received a copy of the GNU General Public License
+along with spsbot.  If not, see <http://www.gnu.org/licenses/>.
 
-Now that you're more familiar with your Bitbucket repository, go ahead and add a new file locally. You can [push your change back to Bitbucket with SourceTree](https://confluence.atlassian.com/x/iqyBMg), or you can [add, commit,](https://confluence.atlassian.com/x/8QhODQ) and [push from the command line](https://confluence.atlassian.com/x/NQ0zDQ).
+
+# Author #
+
+Carlos Linares Lopez <carlos.linares@uc3m.es>

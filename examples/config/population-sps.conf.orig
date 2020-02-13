@@ -1,0 +1,33 @@
+# -- Literals
+
+# Next, a literal is defined for each region
+literal northern_europe
+	"Northern Europe"
+
+# the following literals are formulas instead and they are used to
+# estimate the population in 2015
+literal estimated_northern
+      "=$literal.northern_europe.se + (2,1) * ( 1 + 1000 * ( $literal.northern_europe.se + (3,1) - $literal.northern_europe.se + (4,1) ) )"
+
+# -- Queries
+query countries_northern
+      "select country from region where region='Northern Europe'"
+
+query northern_europe
+   "select population, birth_rate, death_rate from region, demography where region.country=demography.country and region.region='Northern Europe'"
+
+# -- Spreadsheet
+{
+	# -- Global headers
+	$B1 "Country";
+	$C1 "Population in 2014";
+	$D1 "Birth rate per 1,000 population";
+	$E1 "Death rate per 1,000 population";
+	$F1 "Estimated population in 2015";
+
+	# -- Northern Europe
+	$A3 literal.northern_europe;
+	$literal.northern_europe.se + (1,1):$literal.northern_europe.se + (1,1) down query.countries_northern;
+	$literal.northern_europe.se + (2,1):$literal.northern_europe.se + (4,1) down query.northern_europe;
+	$literal.northern_europe.se + (5,1):$query.northern_europe.se + (1,0) down literal.estimated_northern;
+}
