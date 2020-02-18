@@ -7,41 +7,26 @@
 # -----------------------------------------------------------------------------
 #
 # Started on  <Wed Jul 11 20:29:55 2018 >
-# Last update <sábado, 21 diciembre 2013 02:14:41 Carlos Linares Lopez (clinares)>
 # -----------------------------------------------------------------------------
 #
-# $Id::                                                                      $
-# $Date::                                                                    $
-# $Revision::                                                                $
-# -----------------------------------------------------------------------------
-#
-# Made by 
-# Login   <clinares@atlas>
+# Carlos Linares Lopez
+# Login   <carlos.linares@uc3m.es>
 #
 
 """
 A parser for the sps language used to specify the contents of spreadsheets
 """
 
-# globals
-# -----------------------------------------------------------------------------
-__version__  = '1.0'
-
-
 # imports
 # -----------------------------------------------------------------------------
 import datetime
 import re                               # match
-import string                           # split
 import sys                              # exit
 
 import ply.lex as lex
 import ply.yacc as yacc
 
-import structs
 import spsstructs
-
-import pdb
 
 # classes
 # -----------------------------------------------------------------------------

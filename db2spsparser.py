@@ -7,26 +7,15 @@
 # -----------------------------------------------------------------------------
 #
 # Started on  <Tue Jul 24 15:18:45 2018 >
-# Last update <sábado, 21 diciembre 2013 02:14:41 Carlos Linares Lopez (clinares)>
 # -----------------------------------------------------------------------------
 #
-# $Id::                                                                      $
-# $Date::                                                                    $
-# $Revision::                                                                $
-# -----------------------------------------------------------------------------
-#
-# Made by 
-# Login   <clinares@atlas>
+# Carlos Linares Lopez
+# Login   <carlos.linares@uc3m.es>
 #
 
 """
 provides an argument parser for reading the argument command line of db2sps
 """
-
-# globals
-# -----------------------------------------------------------------------------
-__version__  = '1.0'
-
 
 # imports
 # -----------------------------------------------------------------------------
@@ -34,7 +23,7 @@ import argparse                 # argument parsing
 import sys                      # system accessing
 
 import spsparser
-
+import version
 
 # -----------------------------------------------------------------------------
 # ShowDatabaseSpec
@@ -123,7 +112,7 @@ class DB2SPSParser (object):
                                  help="suppress headers")
         self._misc.add_argument ('-V', '--version',
                                  action='version',
-                                 version=" %s version %s" % (sys.argv [0], __version__),
+                                 version=" %s version %s (%s)" % (sys.argv [0], version.__version__, version.__revision__),
                                  help="output version information and exit")
 
     # -----------------------------------------------------------------------------

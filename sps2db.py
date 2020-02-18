@@ -6,34 +6,18 @@
 # -----------------------------------------------------------------------------
 #
 # Started on  <Tue Jun 19 20:05:30 2018 >
-# Last update <sábado, 21 diciembre 2013 02:14:41 Carlos Linares Lopez (clinares)>
 # -----------------------------------------------------------------------------
 #
-# $Id::                                                                      $
-# $Date::                                                                    $
-# $Revision::                                                                $
-# -----------------------------------------------------------------------------
-#
-# Made by 
-# Login   <clinares@atlas>
+# Carlos Linares Lopez
+# Login   <carlos.linares@uc3m.es>
 #
 
 """
 reads data from a spreadsheet and writes it into a sqlite3 database
 """
 
-# globals
-# -----------------------------------------------------------------------------
-__version__  = '1.0'
-
-
 # imports
 # -----------------------------------------------------------------------------
-import argparse                 # argument parsing
-import fnmatch                  # Unix filename pattern matching
-import os                       # os services
-import sys                      # system accessing
-
 import sps2dbparser             # command-line parser
 
 import dbparser                 # database parser
@@ -43,17 +27,18 @@ import dbparser                 # database parser
 if __name__ == '__main__':
 
     # parse the command-line
-    cmdparser = sps2dbparser.Sps2DBParser ()
-    args = cmdparser.parse_args ()
+    CMDPARSER = sps2dbparser.Sps2DBParser()
+    ARGS = CMDPARSER.parse_args()
 
     # create a database session and parse its contents
-    session = dbparser.FileDBParser ()
-    database = session.run (args.configuration)
+    SESSION = dbparser.FileDBParser()
+    DATABASE = SESSION.run(ARGS.configuration)
 
     # now, create the sqlite3 database and writes data into it
-    database.create (args.db, args.append)
-    database.insert (args.db, args.spreadsheet, args.sheetname, args.override, args.append)
-    
+    DATABASE.create(ARGS.db, ARGS.append)
+    DATABASE.insert(ARGS.db, ARGS.spreadsheet, ARGS.sheetname, ARGS.override, ARGS.append)
+
+
 
 # Local Variables:
 # mode:python

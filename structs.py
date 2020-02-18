@@ -6,25 +6,15 @@
 # -----------------------------------------------------------------------------
 #
 # Started on  <Thu Jul 19 07:29:38 2018 >
-# Last update <sábado, 21 diciembre 2013 02:14:41 Carlos Linares Lopez (clinares)>
 # -----------------------------------------------------------------------------
 #
-# $Id::                                                                      $
-# $Date::                                                                    $
-# $Revision::                                                                $
-# -----------------------------------------------------------------------------
-#
-# Made by 
-# Login   <clinares@atlas>
+# Carlos Linares Lopez
+# Login   <carlos.linares@uc3m.es>
 #
 
 """
 Basic structures used both by databases and spreadsheets
 """
-
-# globals
-# -----------------------------------------------------------------------------
-__version__  = '1.0'
 
 
 # imports

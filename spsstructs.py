@@ -7,25 +7,15 @@
 # -----------------------------------------------------------------------------
 #
 # Started on  <Thu Jul 12 15:42:50 2018 >
-# Last update <sábado, 21 diciembre 2013 02:14:41 Carlos Linares Lopez (clinares)>
 # -----------------------------------------------------------------------------
 #
-# $Id::                                                                      $
-# $Date::                                                                    $
-# $Revision::                                                                $
-# -----------------------------------------------------------------------------
-#
-# Made by 
-# Login   <clinares@atlas>
+# Carlos Linares Lopez
+# Login   <carlos.linares@uc3m.es>
 #
 
 """
 Definition of all classes required to represent the information parsed from a sps file
 """
-
-# globals
-# -----------------------------------------------------------------------------
-__version__  = '1.0'
 
 
 # imports
