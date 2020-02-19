@@ -547,8 +547,8 @@ class SPSParser :
     # -----------------------------------------------------------------------------
     # Error rule for syntax errors
     def p_error(self, p):
-        print("Syntax error while processing the database specification file!")
-        print ()
+        print(" Syntax error in line {0} near '{1}': unexpected token {2} found".format(p.lineno, p.value, p.type))
+        print()
         sys.exit ()
     
 

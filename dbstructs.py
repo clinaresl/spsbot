@@ -120,6 +120,39 @@ error. Additionally, in the first two cases, default values shall be specified
 
 
 # -----------------------------------------------------------------------------
+# DBExplicit
+#
+# Definition of data explicitly given
+# -----------------------------------------------------------------------------
+class DBExplicit:
+    """
+    Definition of data explicitly given
+    """
+
+    def __init__(self, data):
+        '''data (of any of the basic types: date, datetime, integers, floating-point
+           numbers and strings) is defined explicitly just by providing it.
+
+           Note that the type of data is not verified for consistency at the
+           time of its creation, but later when it is about to be used
+
+        '''
+
+        # copy the given intervals
+        self._data = data
+
+    def __str__(self):
+        "provide a human-readable representation of the contents of this instance"
+
+        return " Explicit data: {0}".format(self._data)
+
+    def get_data(self):
+        """return the data given in this explicit definition"""
+
+        return self._data
+
+
+# -----------------------------------------------------------------------------
 # DBRanges
 #
 # Definition of a collection of ranges of cells which provides an iterator
@@ -170,7 +203,7 @@ class DBRanges:
         try:
 
             # return the next element in the current interval if any is available
-            return next(self._intervals [self._ith])
+            return next(self._intervals[self._ith])
 
         except StopIteration:
 
@@ -199,7 +232,7 @@ class DBRanges:
 
         if position < 0:
             return self._intervals
-        return self._intervals [position]
+        return self._intervals[position]
 
 
 # -----------------------------------------------------------------------------
@@ -212,16 +245,18 @@ class DBColumn:
     Provides a definition of columns as they are stored in the database
     """
 
-    def __init__(self, name, ranges, ctype, action):
-        '''defines a column with the given which should be populated with information
-           from the cells in the specified ranges. All data read should be
-           automatically casted into the given ctype. In case a cell contains no
-           data, the specified action should be raised
+    def __init__(self, name, contents, ctype, action):
+        '''defines a column with the given name which should be populated with the
+           specified contents. Contents can be either ranges of cells whose
+           value has to be retrieved from the database or data explicitly given
+
+           All data read should be automatically casted into the given ctype. In
+           case a cell contains no data, the specified action should be raised
 
         '''
 
         # copy the attributes given to the constructor
-        self._name, self._ranges, self._type, self._action = (name, ranges, ctype, action)
+        self._name, self._contents, self._type, self._action = (name, contents, ctype, action)
 
         # and also intialize the container which should store the data retrieved
         # from the spreadsheet
@@ -234,20 +269,19 @@ class DBColumn:
         return self._name == other._name
 
     def __str__(self):
-        '''provides a human-readable description of the contents of this database'''
+        '''provides a human-readable description of the contents of this column'''
 
-        return "\t Name  : {0}\n\t Range : {1}\n\t Type  : {2}\n\t Action: {3}".format(self._name, self._ranges, self._type, self._action)
-
+        return "\t Name  : {0}\n\t Contents : {1}\n\t Type  : {2}\n\t Action: {3}".format(self._name, self._contents, self._type, self._action)
 
     def get_name(self):
         '''returns the name of this column'''
 
         return self._name
 
-    def get_ranges(self):
-        '''returns the ranges of this column'''
+    def get_contents(self):
+        '''returns the contents of this column'''
 
-        return self._ranges
+        return self._contents
 
     def get_type(self):
         '''returns the type of this column'''
@@ -261,8 +295,8 @@ class DBColumn:
 
     def extend(self, length):
         '''replicates the length of this column only in case it consists of just one
-        item to have as many as 'length'. In case the column has a distance
-        which is larger than 1 and different than 'length' an error is raised
+        item to have as many as 'length'. In case the column currently has a
+        cardinality larger than 1 and different than 'length' an error is raised
 
         Of course, this method should be invoked after looking up the
         spreadsheet
@@ -285,64 +319,98 @@ class DBColumn:
 
 
     def lookup(self, spsname, sheetname=None):
-        '''returns the contents of this column with data from the spreadsheet
-           spsname. If a sheetname is given, then data is retrieved from the
-           specified one
+        '''returns the contents of this column. If it consists of data explicitly given,
+           then it return it right away after casting it to the appropriate
+           type; if the contents of this column consist of ranges of cells, then
+           it access the spreadsheet to retrieve them
+
+           In case the sheet has to be used, if a sheetname is given, then data
+           is retrieved from the specified one
 
         '''
 
-        # access the specified spreadsheet
-        if not sheetname:
-            sheet = pyexcel.get_sheet(file_name = spsname)
-            sheetname = sheet.name                      # and copy the first sheet's name
-        else:
-            sheet = pyexcel.get_sheet(file_name = spsname, sheet_name=sheetname)
+        # EXPLICIT DATA
+        # ---------------------------------------------------------------------
+        # if the contents of this data consist of data explicitly given then
+        # just return it right away
+        if isinstance(self._contents, DBExplicit):
 
-        # for all cells in all regions of this column
-        for cell in self._ranges:
-
-            # access the data
             try:
 
-                # enclose this look up in a try-except block because there might
-                # be any errors, including "Index out of range"
-                data = sheet [cell]
+                # now, cast data as specified in this instance
+                data = self._contents.get_data()
+                if self._type == 'integer':
+                    data = int(data)
+                elif self._type == 'real':
+                    data = float(data)
+                elif self._type == 'text' or self._type == 'date':
+                    data = str(data)
 
             except Exception:
 
-                # if an error is issued, then just simply consider there is no data
-                data = ''
+                # then apply the action specified in this column as well and
+                # retrieve the default value
+                data = self.handle_action(self._name, self._type, "It was not possible to cast the value '{0}' found in cell {1} in database '{2}::{3}' to the type {4}".format(data, cell, spsname, sheetname, self._type))
 
-            # in case there is no data in this cell
-            if data == '':
+            # and add this data to the result
+            self._data = [data]
 
-                # then apply the action specified in this column and retrieve
-                # the default value to use
-                data = self._action.handle_action(self._name, self._type, "No data was found in cell '{0}' in database '{1}::{2}'".format(cell, spsname, sheetname))
+        # LIST OF REGIONS
+        # ---------------------------------------------------------------------
+        # for all cells in all regions of this column access the specified
+        # spreadsheet
+        elif isinstance(self._contents, DBRanges):
 
-            # if a value is found in this cell but ...
+            if not sheetname:
+                sheet = pyexcel.get_sheet(file_name=spsname)
+                sheetname = sheet.name                      # and copy the first sheet's name
             else:
+                sheet = pyexcel.get_sheet(file_name=spsname, sheet_name=sheetname)
 
-                # it is not possible to cast it to the type specified for this
-                # column
+            for cell in self._contents:
+
+                # access the data
                 try:
 
-                    # now, cast data as specified in this instance
-                    if self._type == 'integer':
-                        data = int(data)
-                    elif self._type == 'real':
-                        data = float(data)
-                    elif self._type == 'text' or self._type == 'date':
-                        data = str(data)
+                    # enclose this look up in a try-except block because there might
+                    # be any errors, including "Index out of range"
+                    data = sheet[cell]
 
                 except Exception:
 
-                    # then apply the action specified in this column as well and
-                    # retrieve the default value
-                    data = self.handle_action(self._name, self._type, "It was not possible to cast the value '{0}' found in cell {1} in database '{2}::{3}' to the type {4}".format(data, cell, spsname, sheetname, self._type))
+                    # if an error is issued, then just simply consider there is no data
+                    data = ''
 
-            # and add this data to the result
-            self._data.append(data)
+                # in case there is no data in this cell
+                if data == '':
+
+                    # then apply the action specified in this column and retrieve
+                    # the default value to use
+                    data = self._action.handle_action(self._name, self._type, "No data was found in cell '{0}' in database '{1}::{2}'".format(cell, spsname, sheetname))
+
+                # if a value is found in this cell but ...
+                else:
+
+                    # it is not possible to cast it to the type specified for this
+                    # column
+                    try:
+
+                        # now, cast data as specified in this instance
+                        if self._type == 'integer':
+                            data = int(data)
+                        elif self._type == 'real':
+                            data = float(data)
+                        elif self._type == 'text' or self._type == 'date':
+                            data = str(data)
+
+                    except Exception:
+
+                        # then apply the action specified in this column as well and
+                        # retrieve the default value
+                        data = self.handle_action(self._name, self._type, "It was not possible to cast the value '{0}' found in cell {1} in database '{2}::{3}' to the type {4}".format(data, cell, spsname, sheetname, self._type))
+
+                # and add this data to the result
+                self._data.append(data)
 
         # and return the result
         return self._data
@@ -526,7 +594,7 @@ class DBTable:
 
                 # and initialize again the current block
                 icolumn += 1
-                curr = [self._columns [icolumn]]
+                curr = [self._columns[icolumn]]
 
             else:
 
@@ -583,7 +651,7 @@ The block
 
         if position < 0:
             return self._columns
-        return self._columns [position]
+        return self._columns[position]
 
     def get_name(self):
         '''returns the name of this table'''

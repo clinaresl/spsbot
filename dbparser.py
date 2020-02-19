@@ -235,10 +235,10 @@ class DBParser:
             p[0] = [p[1]] + p[2]
 
     def p_column(self, p):
-        '''column : ID rangelist SEMICOLON
-                  | ID rangelist type SEMICOLON
-                  | ID rangelist action SEMICOLON
-                  | ID rangelist type action SEMICOLON'''
+        '''column : ID content SEMICOLON
+                  | ID content type SEMICOLON
+                  | ID content action SEMICOLON
+                  | ID content type action SEMICOLON'''
 
         if len(p) == 4:
             p[0] = dbstructs.DBColumn(p[1], p[2], None, None)
@@ -253,6 +253,22 @@ class DBParser:
                 p[0] = dbstructs.DBColumn(p[1], p[2], None, p[3])
         if len(p) == 6:
             p[0] = dbstructs.DBColumn(p[1], p[2], p[3], p[4])
+
+    # the definition of columns accepts data coming either from the spreadsheet
+    # (as a sequence of regions), or given explicitly
+    def p_content(self, p):
+        '''content : rangelist
+                   | explicit'''
+
+        p[0] = p[1]
+
+    # data explicitly given is defined literally, as much as when defining
+    # default values. The difference though is that data has to go encapsulated
+    # in a specific type for explicit data
+    def p_explicit(self, p):
+        '''explicit : default'''
+
+        p[0] = dbstructs.DBExplicit(p[1])
 
     def p_rangelist(self, p):
         '''rangelist : range
@@ -323,8 +339,7 @@ class DBParser:
     # -----------------------------------------------------------------------------
     # Error rule for syntax errors
     def p_error(self, p):
-        print(" Syntax error while processing the database specification file!")
-        print(" Message: {0}".format(p))
+        print(" Syntax error in line {0} near '{1}': unexpected token {2} found".format(p.lineno, p.value, p.type))
         print()
         sys.exit()
 
