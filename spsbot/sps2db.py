@@ -18,26 +18,37 @@ reads data from a spreadsheet and writes it into a sqlite3 database
 
 # imports
 # -----------------------------------------------------------------------------
-import sps2dbparser             # command-line parser
+from . import sps2dbparser      # command-line parser
+from . import dbparser          # database parser
 
-import dbparser                 # database parser
+
+# main
+#
+# parses the command line and start a session to write data into the selected
+# database
+# -----------------------------------------------------------------------------
+def main():
+    """parses the command line and start a session to write data into the selected
+       database"""
+
+    # parse the command-line
+    args = sps2dbparser.Sps2DBParser().parse_args()
+
+    # create a database session and parse its contents
+    session = dbparser.FileDBParser()
+    database = session.run(args.configuration)
+
+    # now, create the sqlite3 database and writes data into it
+    database.create(args.db, args.append)
+    database.insert(args.db, args.spreadsheet, args.sheetname, args.override, args.append)
+
 
 # Main body
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
 
-    # parse the command-line
-    CMDPARSER = sps2dbparser.Sps2DBParser()
-    ARGS = CMDPARSER.parse_args()
-
-    # create a database session and parse its contents
-    SESSION = dbparser.FileDBParser()
-    DATABASE = SESSION.run(ARGS.configuration)
-
-    # now, create the sqlite3 database and writes data into it
-    DATABASE.create(ARGS.db, ARGS.append)
-    DATABASE.insert(ARGS.db, ARGS.spreadsheet, ARGS.sheetname, ARGS.override, ARGS.append)
-
+    # run the main entry point
+    main()
 
 
 # Local Variables:

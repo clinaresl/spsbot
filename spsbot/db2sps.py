@@ -18,24 +18,34 @@ automatically fills in data from a database in a spreadsheet
 
 # imports
 # -----------------------------------------------------------------------------
-import db2spsparser             # command-line parser
+from . import db2spsparser      # command-line parser
+from . import spsparser         # spreadsheet parser
 
-import spsparser                # spreadsheet parser
+# main
+#
+# parses the command line and start a session to write data into the selected
+# spreadsheet
+# -----------------------------------------------------------------------------
+def main():
+    """parses the command line and start a session to write data into the selected
+       spreadsheet"""
+
+    # parse the command-line
+    args = db2spsparser.DB2SPSParser().parse_args()
+
+    # create a database session and parse its contents
+    session = spsparser.FileSPSParser()
+    book = session.run(args.configuration)
+
+    # now, create the sqlite3 database and writes data into it
+    book.execute(args.db, args.spreadsheet, args.sheetname, args.override)
+
 
 # Main body
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
 
-    # parse the command-line
-    CMDPARSER = db2spsparser.DB2SPSParser()
-    ARGS = CMDPARSER.parse_args()
-
-    # create a database session and parse its contents
-    SESSION = spsparser.FileSPSParser()
-    BOOK = SESSION.run(ARGS.configuration)
-
-    # now, create the sqlite3 database and writes data into it
-    BOOK.execute(ARGS.db, ARGS.spreadsheet, ARGS.sheetname, ARGS.override)
+    main()
 
 
 # Local Variables:

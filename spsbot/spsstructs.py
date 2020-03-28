@@ -30,7 +30,7 @@ import re
 import sqlite3
 import sys
 
-import structs
+from . import structs
 
 # functions
 # -----------------------------------------------------------------------------

@@ -1,12 +1,12 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# db2spsparser.py
-# Description: provides an argument parser for reading the argument
-# command line of db2sps
+# sps2dbparser.py
+# Description: provides an argument parser for reading the argument command line
+# of sps2db
 # -----------------------------------------------------------------------------
 #
-# Started on  <Tue Jul 24 15:18:45 2018 >
+# Started on  <Fri Jun 29 23:37:43 2018 >
 # -----------------------------------------------------------------------------
 #
 # Carlos Linares Lopez
@@ -14,7 +14,7 @@
 #
 
 """
-provides an argument parser for reading the argument command line of db2sps
+provides an argument parser for reading the argument command line of sps2db
 """
 
 # imports
@@ -22,50 +22,50 @@ provides an argument parser for reading the argument command line of db2sps
 import argparse                 # argument parsing
 import sys                      # system accessing
 
-import spsparser
-import version
+from . import dbparser
+from . import version
 
 # -----------------------------------------------------------------------------
 # ShowDatabaseSpec
 #
-# shows a comprehensive output of the specification of the spreadsheet
+# shows a comprehensive output of the specification of the database
 # -----------------------------------------------------------------------------
 class ShowDatabaseSpec (argparse.Action):
     """
-    shows a comprehensive output of the specification of the spreadsheet
+    shows a comprehensive output of the specification of the database
     """
 
     def __call__(self, parser, namespace, values, option_string=None):
 
         # if no test was provided, exit with a manual error
         if not namespace.configuration:
-            parser.error (" no spreadsheet specification file! Make sure to invoke --parse-sps *after* --configuration")
+            parser.error (" no database specification file! Make sure to invoke --parse-db *after* --configuration")
             sys.exit (0)
 
         # parse the database
-        session = spsparser.FileSPSParser ()
-        book = session.run (namespace.configuration)
+        session = dbparser.FileDBParser ()
+        database = session.run (namespace.configuration)
             
         # otherwise, process the file through the main entry point provided in
         # dbtools and exit
         print ("""
- Contents of the spreadsheet specification file:
+ Contents of the database specification file:
  --------------------------------------------""")
-        print(book)
+        print(database)
 
         # and finally exit
         sys.exit (0)
 
 
 # -----------------------------------------------------------------------------
-# DB2SPSParser
+# Sps2DBParser
 #
 # provides an argument parser for reading the argument command line of
-# db2sps
+# sps2db
 # -----------------------------------------------------------------------------
-class DB2SPSParser (object):
+class Sps2DBParser (object):
     """
-    provides an argument parser for reading the argument command line of db2sps
+    provides an argument parser for reading the argument command line of sps2db
     """
 
     def __init__ (self):
@@ -74,39 +74,44 @@ class DB2SPSParser (object):
         """
 
         # initialize a parser
-        self._parser = argparse.ArgumentParser (description="automatically fills in data from a database in a spreadsheet")
+        self._parser = argparse.ArgumentParser (description="Reads data from a spreadsheet and writes it into a sqlite3 database")
 
         # now, add the arguments
 
         # Group of mandatory arguments
         self._mandatory = self._parser.add_argument_group ("Mandatory arguments", "The following arguments are required")
+        self._mandatory.add_argument ('-d', '--db',
+                                      type=str,
+                                      required=True,
+                                      help="name of the output sqlite3 database. If a file exists with the same an error is raised")
         self._mandatory.add_argument ('-c', '--configuration',
                                       type=str,
                                       required=True,
-                                      help="location of the spreadsheet specification file to use")
+                                      help="location of the database specification file to use")
 
         # Group of optional arguments
         self._optional = self._parser.add_argument_group ('Optional', 'The following arguments are optional')
-        self._optional.add_argument ('-d', '--db',
-                                     type=str,
-                                     help="name of the input sqlite3 database")
         self._optional.add_argument ('-s', '--spreadsheet',
                                      type=str,
-                                     help="filename of the spreadsheet to write. If not given, the spreadsheet specified in the configuration file is used unless --override is given")
+                                     help="provides the location of the spreadsheet to read. If not given, the spreadsheet specified in the configuration file is used unless --override is given")
         self._optional.add_argument ('-n', '--sheetname',
                                      type=str,
-                                     help="if given, data is written to the specified sheet name. If not given, the spreadsheet specified in the configuration file is used unless --override is given; if none is given neither here nor in the configuration file, a default sheet is created automatically")
+                                     help="if given, data is retrieved from the specified sheet name. If not given, the spreadsheet specified in the configuration file is used unless --override is given; if none is given neither here nor in the configuration file, the first sheet found in the spreadsheet is used by default")
         self._optional.add_argument ('-o', '--override',
                                      default=False,
                                      action='store_true',
-                                     help="if given, the database, the spreadsheet and the sheetname specified with --db, --spreadsheet and --sheetname are used even if others are found in the configuration file")
+                                     help="if given, the spreadsheet and the sheetname specified with --spreadsheet and --sheetname are used even if others are found in the configuration file")
+        self._optional.add_argument ('-a', '--append',
+                                     default=False,
+                                     action='store_true',
+                                     help="if given, all data extracted from the spreadsheet is added to the specified database tables; if not, an error is raised in case a database table with the same name is found. In any case, if a database with the same name given with --db exists, execution halts")
 
         # Group of miscellaneous arguments
         self._misc = self._parser.add_argument_group ('Miscellaneous')
-        self._misc.add_argument ('-b', '--parse-sps',
+        self._misc.add_argument ('-b', '--parse-db',
                                  nargs=0,
                                  action=ShowDatabaseSpec,
-                                 help="processes the spreadsheet specification file, shows the resulting definitions and exits")
+                                 help="processes the database specification file, shows the resulting definitions and exits")
         self._misc.add_argument ('-q', '--quiet',
                                  action='store_true',
                                  help="suppress headers")
