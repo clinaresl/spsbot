@@ -20,9 +20,6 @@ Definition of all classes required to represent the information parsed from a sp
 
 # imports
 # -----------------------------------------------------------------------------
-import pyexcel                  # reading/writing to various formats of spreadsheets
-import xlsxwriter               # writing to xlsx files
-
 import datetime
 import functools
 import math
@@ -30,7 +27,45 @@ import re
 import sqlite3
 import sys
 
+import pyexcel                  # reading/writing to various formats of spreadsheets
+import xlsxwriter               # writing to xlsx files
+
 from . import structs
+
+# globals
+# -----------------------------------------------------------------------------
+
+# -- errors
+ERROR_WRONG_DATE = "Incorrect date expression!"
+ERROR_FORMULA_INTEGER = "It is not possible to cast a formula into an integer"
+ERROR_FORMULA_REAL = "It is not possible to cast a formula into a real"
+ERROR_FORMULA_UNKNOWN = "Unknown type to be casted into a formula"
+
+ERROR_DATETIME_FORMULA = "It is not possible to cast a formula into a datetime"
+ERROR_DATETIME_UNKNOWN = "Unknown type to be casted into a datetime"
+ERROR_DATETIME_FORMULA = "It is not possible to cast a formula into a datetime"
+
+ERROR_UNKNOWN_TYPE = "Unknown target type '{0}'"
+
+ERROR_UNKNOWN_CELL_TYPE = " Unknown cell type: {0}"
+
+ERROR_DESCRIPTOR_NOT_FOUND = "The descriptor {0} was not found in the context {1}"
+
+ERROR_QUERY_NOT_TEXT = "The type of the following query is not of type 'text': {0}"
+
+ERROR_DB_NOT_FOUND = """Fatal error - No database has been found for executing the following query:
+ {0}"""
+ERROR_NO_DB = "No database was given to execute the following commands"
+
+
+ERROR_FATAL_ERROR = """Fatal error - {0}:
+ {1}"""
+
+ERROR_NO_SPREADSHEET = "No spreadsheet was given to store the results of executing the following commands"
+ERROR_DUP_NAME = "The file '{0}' already contains a sheet named '{1}'"
+
+# -- literals
+LITERAL_CREATING_SPREADSHEET = " Creating '{0}:{1}' ..."
 
 # functions
 # -----------------------------------------------------------------------------
@@ -47,7 +82,7 @@ from . import structs
 # 2. The time should be given in the format HH:MM:SS where microseconds can be
 #    specified as well after the seconds preceded by a dot
 # -----------------------------------------------------------------------------
-def string_to_datetime (value):
+def string_to_datetime(value):
     '''casts the given value which should be a string to an instace of datetime. The
        format of the string should give first the date and then the time:
 
@@ -59,63 +94,68 @@ def string_to_datetime (value):
 
     '''
 
+    # -- initialization
+    result = None
+
     # check if the format used was YYYY, mm, dd with either dashes or
     # slashes. When processing the time, verify whether microseconds were given
     # or not
-    if re.match (r'\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}', str (value)):
-        if re.match (r'\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str (value)):
-            return datetime.datetime.strptime (str (value), "%Y-%m-%d %H:%M:%S.%f")
-        return datetime.datetime.strptime (str (value), "%Y-%m-%d %H:%M:%S")
-    elif re.match (r'\d{4}/\d{1,2}/\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}', str (value)):
-        if re.match (r'\d{4}/\d{1,2}/\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str (value)):
-            return datetime.datetime.strptime (str (value), "%Y/%m/%d %H:%M:%S.%f")
-        return datetime.datetime.strptime (str (value), "%Y/%m/%d %H:%M:%S")
+    if re.match(r'\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}', str(value)):
+        if re.match(r'\d{4}-\d{1,2}-\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str(value)):
+            result = datetime.datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S.%f")
+        result = datetime.datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S")
+
+    elif re.match(r'\d{4}/\d{1,2}/\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}', str(value)):
+        if re.match(r'\d{4}/\d{1,2}/\d{1,2}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str(value)):
+            result = datetime.datetime.strptime(str(value), "%Y/%m/%d %H:%M:%S.%f")
+        result = datetime.datetime.strptime(str(value), "%Y/%m/%d %H:%M:%S")
 
     # check if the format used was dd, mm, YYY with either dashes or
     # slashes. When processing the time, verify whether microseconds were given
     # or not
-    elif re.match (r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}', str (value)):
-        if re.match (r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str (value)):
-            return datetime.datetime.strptime (str (value, "%d-%m-%Y %H:%M:%S.%f"))
-        return datetime.datetime.strptime (str (value), "%d-%m-%Y %H:%M:%S")
-    elif re.match (r'\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}', str (value)):
-        if re.match (r'\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str (value)):
-            return datetime.datetime.strptime (str (value), "%d/%m/%Y %H:%M:%S.%f")
-        return datetime.datetime.strptime (str (value), "%d/%m/%Y %H:%M:%S")
-    
+    elif re.match(r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}', str(value)):
+        if re.match(r'\d{1,2}-\d{1,2}-\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str(value)):
+            result = datetime.datetime.strptime(str(value, "%d-%m-%Y %H:%M:%S.%f"))
+        result = datetime.datetime.strptime(str(value), "%d-%m-%Y %H:%M:%S")
+
+    elif re.match(r'\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}', str(value)):
+        if re.match(r'\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{1,2}:\d{1,2}\.\d{1,6}', str(value)):
+            result = datetime.datetime.strptime(str(value), "%d/%m/%Y %H:%M:%S.%f")
+        result = datetime.datetime.strptime(str(value), "%d/%m/%Y %H:%M:%S")
+
+    # and return the right expression
+    return result
+
 
 # -----------------------------------------------------------------------------
 # string_to_date
 #
 # casts the given value which should be a string to an instace of date
 # -----------------------------------------------------------------------------
-def string_to_date (value):
+def string_to_date(value):
     '''casts the given value which should be a string to an instace of date
 
     '''
 
-    m = (re.match (r'(\d{4})-(\d{1,2})-(\d{1,2})', str (value)))
-    if m:
-        return datetime.date (int (m.groups ()[0]), int (m.groups ()[1]), int (m.groups ()[2]))
+    match = (re.match(r'(\d{4})-(\d{1,2})-(\d{1,2})', str(value)))
+    if match:
+        return datetime.date(int(match.groups()[0]), int(match.groups()[1]), int(match.groups()[2]))
 
-    else:
-        m = (re.match (r'(\d{4})/(\d{1,2})/(\d{1,2})', str (value)))
-        if m:
-            return datetime.date (int (m.groups ()[0]), int (m.groups ()[1]), int (m.groups ()[2]))
+    match = (re.match(r'(\d{4})/(\d{1,2})/(\d{1,2})', str(value)))
+    if match:
+        return datetime.date(int(match.groups()[0]), int(match.groups()[1]), int(match.groups()[2]))
 
-        else:
-            m = (re.match (r'(\d{1,2})-(\d{1,2})-(\d{4})', str (value)))
-            if m:
-                return datetime.date (int (m.groups ()[2]), int (m.groups ()[1]), int (m.groups ()[0]))
+    match = (re.match(r'(\d{1,2})-(\d{1,2})-(\d{4})', str(value)))
+    if match:
+        return datetime.date(int(match.groups()[2]), int(match.groups()[1]), int(match.groups()[0]))
 
-            else:
-                m = (re.match (r'(\d{1,2})/(\d{1,2})/(\d{4})', str (value)))
-                if m:
-                    return datetime.date (int (m.groups ()[2]), int (m.groups ()[1]), int (m.groups ()[0]))
+    match = (re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', str(value)))
+    if match:
+        return datetime.date(int(match.groups()[2]), int(match.groups()[1]), int(match.groups()[0]))
 
-                else:
-                    raise TypeError (" Incorrect date expression!")
-    
+    # otherwise, raise an exception as this date could not be parsed
+    raise TypeError(ERROR_WRONG_DATE)
+
 
 # -----------------------------------------------------------------------------
 # cast_value
@@ -129,7 +169,7 @@ def string_to_date (value):
 #
 # It is assumed that the conversion is feasible
 # -----------------------------------------------------------------------------
-def cast_value (value, ctype):
+def cast_value(value, ctype):
     '''casts the given value to the specified type which should be one among those
        acknowledged by spsbot: text, integer, real, date, datetime and
        formula. All casts are supposed to be sound and complete, so that it
@@ -146,138 +186,142 @@ def cast_value (value, ctype):
 
     # This function does not warn the user if the input (c)type is of an unknown
     # type!!
-    
+
     # -- string
     if ctype == "text":
 
         # it is only necessary here to take a word of caution with dates and
         # datetimes which should be explicitly formatted as strings
-        if isinstance (value, datetime.date):
-            return datetime.date.strftime (value, "%d-%m-%Y")
-        elif isinstance (value, datetime.datetime):
-            return datetime.datetime.strftime (value, "%d-%m-%Y %H:%M:%S")
-        else:
+        if isinstance(value, datetime.date):
+            return datetime.date.strftime(value, "%d-%m-%Y")
+        if isinstance(value, datetime.datetime):
+            return datetime.datetime.strftime(value, "%d-%m-%Y %H:%M:%S")
 
-            # integers, reals, strings and formulas can be directly casted to
-            # strings
-            return str (value)
+        # integers, reals, strings and formulas can be directly casted to
+        # strings
+        return str(value)
 
     # -- integer
-    elif ctype == "integer":
+    if ctype == "integer":
 
         # again, we only have to take care of dates/times
-        if isinstance (value, datetime.datetime):
+        if isinstance(value, datetime.datetime):
 
             # return the number of seconds elapsed since January, 1, 1970, the
             # year I was bornt! :)
-            return int ((value-datetime.datetime (1970,1,1)).total_seconds ())
-            
-        elif isinstance (value, datetime.date):
+            return int((value-datetime.datetime(1970, 1, 1)).total_seconds())
+
+        if isinstance(value, datetime.date):
 
             # in this case we return the proleptic Gregorian ordinal of the
             # date, where January 1 of year 1 has ordinal 1
-            return value.toordinal ()
-        else:
+            return value.toordinal()
 
-            # we plainly assume here that the conversion is feasible. This is
-            # imposible for formulas and it might be problematic for many
-            # different strings
-            if isinstance (value, str) and value[0]=='=':
-                raise TypeError ("It is not possible to cast a formula into an integer")
-            return int (value)
+        # we plainly assume here that the conversion is feasible. This is
+        # imposible for formulas and it might be problematic for many
+        # different strings
+        if isinstance(value, str) and value[0]=='=':
+            raise TypeError(ERROR_FORMULA_INTEGER)
+        return int(value)
 
     # -- real
-    elif ctype == "real":
+    if ctype == "real":
 
         # we proceed much in the same vain as in the integer case
-        if isinstance (value, datetime.datetime):
-            return (value-datetime.datetime (1970,1,1)).total_seconds ()
-            
-        elif isinstance (value, datetime.date):
-            return float (value.toordinal ())
-        
-        else:
-            if isinstance (value, str) and value[0]=='=':
-                raise TypeError ("It is not possible to cast a formula into a real")
-            return float (value)
+        if isinstance(value, datetime.datetime):
+            return(value-datetime.datetime(1970, 1, 1)).total_seconds()
+
+        if isinstance(value, datetime.date):
+            return float(value.toordinal())
+
+        if isinstance(value, str) and value[0] == '=':
+            raise TypeError(ERROR_FORMULA_REAL)
+        return float(value)
 
     # -- formula
-    elif ctype == "formula":
+    if ctype == "formula":
 
         # if we are given a number, either an integer or a real, then just
         # simply cast it into a string and add '='
-        if isinstance (value, int) or isinstance (value, float):
-            return '=' + str (value)
+        if isinstance(value, (int, float)):
+            return '=' + str(value)
 
         # in case we are given a string, we cast it by adding the prefix '='
         # unless it already starts with the equality sign
-        if isinstance (value, str):
-            return '=' + value if value[0]!='=' else value
+        if isinstance(value, str):
+            return '=' + value if value[0] != '=' else value
 
         # in case we are given either a datetime or a date, we want it to
         # preserve its value, so we use the function DATEVALUE over the string
         # which results of casting the value into a string
-        if isinstance (value, datetime.datetime) or isinstance (value, datetime.date):
-            return '=' + cast_value (value, "text")
-    
+        if isinstance(value, (datetime.datetime, datetime.date)):
+            return '=' + cast_value(value, "text")
+
+        # in any other case raise an error, as this type is not known for
+        # casting into a formula
+        raise TypeError(ERROR_FORMULA_UNKNOWN)
+
     # -- datetime
-    elif ctype == "datetime":
+    if ctype == "datetime":
 
         # if we are given either an integer or a real, this should be
         # interpreted as the number of seconds elapsed since January, 1, 1970.
-        if isinstance (value, int) or isinstance (value, float):
-            return datetime.datetime (1970,1,1) + datetime.timedelta (seconds = value)
+        if isinstance(value, (int, float)):
+            return datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=value)
 
         # if we are given a string, we cast it as we do with the parser
-        if isinstance (value, str):
+        if isinstance(value, str):
 
             # if we are given a formula, then there is nothing to do:
-            if value[0]=='=':
-                raise TypeError ("It is not possible to cast a formula into a datetime")
-            return string_to_datetime (value)
+            if value[0] == '=':
+                raise TypeError(ERROR_DATETIME_FORMULA)
+            return string_to_datetime(value)
 
         # if we are given a date
-        if isinstance (value, date) or isinstance (value, datetime.datetime):
-            return datetime.dateime (value.year, value.month, value.day)
+        if isinstance(value, (datetime.datetime, datetime.date)):
+            return datetime.datetime(value.year, value.month, value.day)
+
+        # in any other case raise an error, as this type is not known to be
+        # casted into a datetime
+        raise TypeError(ERROR_DATETIME_UNKNOWN)
 
     # -- date
-    elif ctype == "date":
+    if ctype == "date":
 
         # if we are given either an integer or a real, this should be
         # interpreted as the the proleptic Gregorian ordinal of the date, where
         # January 1 of year 1 has ordinal 1
-        if isinstance (value, int) or isinstance (value, float):
-            return datetime.date.fromordinal (int (value))
+        if isinstance(value, (int, float)):
+            return datetime.date.fromordinal(int(value))
 
         # if we are given a string, then we cast it as we do with the parser
         # unless we are given a formula
-        if isinstance (value, str):
-            if value[0]=='=':
-                raise TypeError ("It is not possible to cast a formula into a datetime")
-            return string_to_date (value)
+        if isinstance(value, str):
+            if value[0] == '=':
+                raise TypeError(ERROR_DATETIME_FORMULA)
+            return string_to_date(value)
 
         # if we are given a datetime, we just simply disregard the time
-        if isinstance (value, datetime.date) or isinstance (value, datetime.datetime):
-            return datetime.date (value.year, value.month, value.day)
+        if isinstance(value, (datetime.datetime, datetime.date)):
+            return datetime.date(value.year, value.month, value.day)
 
     # -- unknown!
-    else:
-        raise TypeError (" Unknown target type '{0}'".format (ctype))
-    
-    
+    raise TypeError(ERROR_UNKNOWN_TYPE.format(ctype))
+
+
 # -----------------------------------------------------------------------------
 # get_type
 #
 # returns the type of its argument, one among [text, integer, real, date,
 # datetime, formula]. If the type cannot be derived, it returns 'unknown'
 # -----------------------------------------------------------------------------
-def get_type (content):
+def get_type(content):
     '''returns the type of its argument, one among [text, integer, real, date,
     datetime, formula]. If the type cannot be derived, it returns 'unknown'
 
     '''
 
-    if isinstance (content, str):
+    if isinstance(content, str):
 
         # SQLite does not have specific types for storing
         # dates/timedates/times. Instead, they can be stored as a string,
@@ -286,30 +330,31 @@ def get_type (content):
         # "YYYY-MM-DD HH:MM:SS"
 
         # Check datetimes before dates as the former can be matched as the second
-        if re.match (r'\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\s+\d{1,2}:\d{1,2}:\d{1,2}(\.\d{1,6})?', content):
+        if re.match(r'\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\s+\d{1,2}:\d{1,2}:\d{1,2}(\.\d{1,6})?',
+                    content):
             return "datetime"
-        elif re.match (r'\d{1,4}-\d{1,2}-\d{1,2}', content):
+        if re.match(r'\d{1,4}-\d{1,2}-\d{1,2}', content):
             return "date"
-        elif content [0] == '=':
+        if content[0] == '=':
 
             # formulas are recognized because the first character is '='
             return "formula"
-        else:
 
-            # if the format of the string is unknown, then it is assumed to be
-            # plain text
-            return "text"
-    elif isinstance (content, float):
+        # finally, if the format of the string is unknown, then it is assumed to
+        # be plain text
+        return "text"
+
+    if isinstance(content, float):
         return "real"
-    elif isinstance (content, int):
+    if isinstance(content, int):
         return "integer"
-    else:
-        return "unknown"
+
+    return "unknown"
 
 
 # -----------------------------------------------------------------------------
 # drag
-# 
+#
 # replace the occurrence of each cell not preceded by '$' with a new cell where
 # the given offset is applied. The offset is given in the form (<col-offset>,
 # <row-offset>)
@@ -320,7 +365,7 @@ def get_type (content):
 #
 # produces "E30 + $D31 + G30"
 # -----------------------------------------------------------------------------
-def drag (offset, string):
+def drag(offset, string):
     '''replace the occurrence of each cell not preceded by '$' with a new cell where
        the given offset is applied. The offset is given in the form
        (<col-offset>, <row-offset>)
@@ -334,14 +379,14 @@ def drag (offset, string):
     '''
 
     # match any cell name which is not preceded by '$'
-    for match in re.finditer (r'(?<!\$)[a-zA-Z]+\d+', string):
+    for match in re.finditer(r'(?<!\$)[a-zA-Z]+\d+', string):
 
         # now, add to this cell the given offset
-        cell = structs.add_columns (match.group (), offset[0])
-        cell = structs.add_rows (cell, offset[1])
+        cell = structs.add_columns(match.group(), offset[0])
+        cell = structs.add_rows(cell, offset[1])
 
         # and perform the substitution
-        string = re.sub (match.group (), cell, string)
+        string = re.sub(match.group(), cell, string)
 
     # and return the resulting string
     return string
@@ -357,7 +402,7 @@ def drag (offset, string):
 # unchanged. repl must be a dictionary which specifies, for every feasible
 # match, the value that should be used in the substitution.
 #
-# Example: 
+# Example:
 #
 #    evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
 #              {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
@@ -378,7 +423,7 @@ def drag (offset, string):
 #
 #    produces "=AVERAGE(A3, $F42)"
 # -----------------------------------------------------------------------------
-def evaluate (pattern, repl, string):
+def evaluate(pattern, repl, string):
     '''Return the string obtained by evaluating the leftmost non-overlapping
        occurrences of pattern in string preceded by '$'and an offset specified
        in the form "+(<number>, <number>)" with the values in replacement repl
@@ -386,7 +431,7 @@ def evaluate (pattern, repl, string):
        unchanged. repl must be a dictionary which specifies, for every feasible
        match, the value that should be used in the substitution.
 
-       Example: 
+       Example:
 
           evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
                     {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
@@ -411,22 +456,27 @@ def evaluate (pattern, repl, string):
 
     # for all occurrences of the given pattern which are preceded by the dollar
     # sign and followed by an offset
-    for match in re.finditer (r'\$' + pattern + r'\s*\+\s*\(\s*[\+-]?\d+,\s*[\+-]?\d+\)', string):
+    for match in re.finditer(r'\$' + pattern + r'\s*\+\s*\(\s*[\+-]?\d+,\s*[\+-]?\d+\)', string):
 
         # process this occurrence for extracting the variable and the offset
-        m = re.match (r'(' + pattern + r')' + r'\s*\+\s*\(\s*([\+-]?\d+),\s*([\+-]?\d+)\)', match.group ()[1:])
+        match = re.match(r'(' + pattern + r')' + r'\s*\+\s*\(\s*([\+-]?\d+),\s*([\+-]?\d+)\)',
+                         match.group()[1:])
 
         # create now a spscell with the information extracted so far and
         # evaluate the expression with the information given in replacement
-        cell = SPSCellReference (m.groups ()[0], int (m.groups ()[1]), int (m.groups ()[2]))
-        result = cell.execute (repl)
+        cell = SPSCellReference(match.groups()[0], int(match.groups()[1]), int(match.groups()[2]))
+        result = cell.execute(repl)
 
         # and now simply substitute this match with the result of the evaluation
         # but take special care with the offset: it could be given with the plus
         # sign which should be escaped
-        coloffset = r'\+' + m.groups ()[1][1:] if m.groups ()[1][0]=='+' else m.groups ()[1]
-        rawoffset = r'\+' + m.groups ()[2][1:] if m.groups ()[2][0]=='+' else m.groups ()[2]
-        string = re.sub (r"\${0}\s*\+\s*\(\s*{1},\s*{2}\)".format(m.groups ()[0], coloffset,rawoffset), result, string)
+        coloffset = r'\+' + match.groups()[1][1:] if match.groups()[1][0] == '+' \
+            else match.groups()[1]
+        rawoffset = r'\+' + match.groups()[2][1:] if match.groups()[2][0] == '+' \
+            else match.groups()[2]
+        string = re.sub(r"\${0}\s*\+\s*\(\s*{1},\s*{2}\)".format(match.groups()[0],
+                                                                 coloffset, rawoffset),
+                        result, string)
 
     # and return the resulting string
     return string
@@ -441,16 +491,16 @@ def evaluate (pattern, repl, string):
 # be a dictionary which specifies, for every feasible match, the value that
 # should be used in the substitution.
 #
-# Example: 
+# Example:
 #
 #    substitute (r'[a-zA-Z]+', {'name': "Alan", 'surname': "Turing"},
-#                "My name is $name $surname") 
+#                "My name is $name $surname")
 #    produces "My name is Alan Turing"
 #
 # Incidentally, if the pattern is preceded of various '$' then all but the
 # rightmost are preserved.
 #
-# Example: 
+# Example:
 #
 #    substitute (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
 #                {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
@@ -464,18 +514,18 @@ def evaluate (pattern, repl, string):
 #                {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
 #                "=AVERAGE($$query.personal_data.nw, $$query.personal_data.sw)")
 #
-#   (note the "$$" in string)
+#    (note the "$$" in string)
 #
 #    produces "=AVERAGE($B2, $B41)"
 # -----------------------------------------------------------------------------
-def substitute (pattern, repl, string):
+def substitute(pattern, repl, string):
     '''Return the string obtained by replacing the leftmost non-overlapping
        occurrences of pattern in string preceded by '$' by the replacement
        repl. If the pattern isn’t found, string is returned unchanged. repl must
        be a dictionary which specifies, for every feasible match, the value that
        should be used in the substitution.
 
-       Example: 
+       Example:
 
           substitute (r'[a-zA-Z]+', {'name': "Alan", 'surname': "Turing"},
                       "My name is $name $surname") 
@@ -484,7 +534,7 @@ def substitute (pattern, repl, string):
        Incidentally, if the pattern is preceded of various '$' then all but the
        rightmost are preserved.
 
-       Example: 
+       Example:
 
           substitute (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+',
                       {'query.personal_data.nw':'B2', 'query.personal_data.sw':'B41'},
@@ -506,10 +556,10 @@ def substitute (pattern, repl, string):
 
     # for all occurrences of the given pattern which are preceded by the dollar
     # sign
-    for match in re.finditer (r'\$' + pattern, string):
+    for match in re.finditer(r'\$' + pattern, string):
 
         # perform the substitution
-        string = re.sub ("\${0}".format (match.group ()[1:]), repl[match.group ()[1:]], string)
+        string = re.sub(r'\${0}'.format(match.group()[1:]), repl[match.group()[1:]], string)
 
     # and return the resulting string
     return string
@@ -530,7 +580,7 @@ class DynamicArray:
 
     """
 
-    def __init__ (self):
+    def __init__(self):
 
         '''creates an empty two-dimensional array
 
@@ -539,36 +589,33 @@ class DynamicArray:
         # initializes the private two-dimensional array
         self._data = [[]]
 
-        
-    def __getitem__ (self, key):
+
+    def __getitem__(self, key):
         '''return the evaluation of self[key], where key is a cell name such as
            D4. First row is A, and first column is 1
 
         '''
 
         # process the key to get both the row and column
-        (col, row) = structs.get_columnrow (key)
+        (col, row) = structs.get_columnrow(key)
 
         # translate now the column into a unique integer identifier
         # corresponding to its position (where 'A' is 0)
-        column = structs.get_columnindex (col)
+        column = structs.get_columnindex(col)
 
         # return the value at the given location provided that the key is within
         # the range of this dynamic array
-        if row <= len (self._data):
+        if row <= len(self._data):
 
-            if column < len (self._data [row-1]):
-
+            if column < len(self._data[row-1]):
                 return self._data[row-1][column]
 
-            else:
-                raise IndexError
-
-        else:
             raise IndexError
 
-        
-    def __setitem__ (self, key, value):
+        raise IndexError
+
+
+    def __setitem__(self, key, value):
         '''set the value of the position corresponding to the given key with the
            specified content. If necessary, the two-dimensional array is
            extended to insert the new value
@@ -576,57 +623,57 @@ class DynamicArray:
         '''
 
         # process the key to get both the row and column
-        (col, row) = structs.get_columnrow (key)
+        (col, row) = structs.get_columnrow(key)
 
         # translate now the column into a unique integer identifier
         # corresponding to its position (where 'A' is 0)
-        column = structs.get_columnindex (col)
+        column = structs.get_columnindex(col)
 
         # randomly access the specified row
-        if row <= len (self._data):
+        if row <= len(self._data):
 
             # and also randomly access the specified column within this row
-            if column < len (self._data [row-1]):
+            if column < len(self._data[row-1]):
 
                 # insert the value
-                self._data [row-1][column] = value
+                self._data[row-1][column] = value
 
             else:                       # if this column goes beyond the current size
 
                 # create extra columns and add them to the coresponding row
-                extracols = [None]*(1+column-len (self._data[row-1]))
-                self._data [row-1].extend (extracols)
+                extracols = [None]*(1+column-len(self._data[row-1]))
+                self._data[row-1].extend(extracols)
 
                 # and try the insertion again
-                self.__setitem__ (key, value)
+                self.__setitem__(key, value)
 
         else:                           # if this row goes beyond the current size
 
             # add as many empty rows as necessary
-            for irow in range (row-len (self._data)):
-                self._data.extend ([[]])
+            for _ in range(row-len(self._data)):
+                self._data.extend([[]])
 
             # and make now the insertion
-            self.__setitem__ (key, value)
+            self.__setitem__(key, value)
 
-            
-    def rows (self):
+
+    def rows(self):
         '''return the number of rows in the two-dimensional array'''
 
-        return len (self._data)
+        return len(self._data)
 
-    
-    def columns (self, row):
+
+    def columns(self, row):
         '''return the number of columns in the given row. The first row index should be 1'''
 
-        return len (self._data[row-1])
+        return len(self._data[row-1])
 
-    
-    def get_data (self):
+
+    def get_data(self):
         '''return the two-dimensional array of this instance'''
 
         return self._data
-            
+
 
 # -----------------------------------------------------------------------------
 # SPSCellAttribute
@@ -638,7 +685,7 @@ class SPSCellAttribute:
 
     """
 
-    def __init__ (self, attributes=None):
+    def __init__(self, attributes=None):
         """The attributes of a cell are defined as a dictionary where the index is the
            attribute for which its value is specified
 
@@ -646,20 +693,25 @@ class SPSCellAttribute:
 
         self._attributes = attributes if attributes else {}
 
-    def __str__ (self):
+    def __str__(self):
         """provides a human readable representation of this instance"""
 
         output = "["
 
         # now just simply return all values in the dictionary as a string in the
         # form 'key : value'
-        output += functools.reduce (lambda x, y : x + ", " + y,
-                                    ["{0} : {1}".format (key, self._attributes [key])
-                                     for key in self._attributes.keys ()])
+        output += functools.reduce(lambda x, y: x + ", " + y,
+                                   ["{0} : {1}".format(key, self._attributes[key])
+                                    for key in self._attributes.keys()])
         output += "]"
 
         return output
-        
+
+    def get_attributes(self):
+        """return the attributes of this cell"""
+
+        return self._attributes
+
 
 # -----------------------------------------------------------------------------
 # SPSCellContent
@@ -671,7 +723,7 @@ class SPSCellContent:
 
     """
 
-    def __init__ (self, data, ctype, attributes=None):
+    def __init__(self, data, ctype, attributes=None):
         """The contents of a cell are qualified by its data, its type, which should be
            restricted to one among: datetime, date, text, integer, real,
            formula, (i.e., those recognized from the database and, additionally,
@@ -682,39 +734,42 @@ class SPSCellContent:
 
         # verify that the given type is known, and reject unknown types
         if ctype not in ['datetime', 'date', 'text', 'integer', 'real', 'formula']:
-            raise ValueError (" The cell content type '{0}' is not known!".format (ctype))
+            raise ValueError(ERROR_UNKNOWN_CELL_TYPE.format(ctype))
 
         # and copy now the attributes
         (self._data, self._type, self._attributes) = (data, ctype, attributes)
 
-    def __str__ (self):
+    def __str__(self):
         '''provides a human readable representation of the contents of this intance'''
 
         if self._attributes:
-            output = "Contents '{0}' with type '{1}' and format '{2}'".format (self._data, self._type, self._attributes)
+            output = "Contents '{0}' with type '{1}' and format '{2}'".format(self._data,
+                                                                              self._type,
+                                                                              self._attributes)
         else:
-            output = "Contents '{0}' with type '{1}'".format (self._data, self._type)
+            output = "Contents '{0}' with type '{1}'".format(self._data,
+                                                             self._type)
 
         if self._attributes:
-            output += "{0}".format (self._attributes)
-            
+            output += "{0}".format(self._attributes)
+
         return output
-        
-    def get_data (self):
+
+    def get_data(self):
         """ returns the contents of this cell"""
 
         return self._data
 
-    def get_type (self):
+    def get_type(self):
         """ returns the type of contents of this cell"""
 
         return self._type
 
-    def get_attributes (self):
+    def get_attributes(self):
         """ return a list with the (xlsxwriter) attributes of this cell"""
 
-        return self._attributes        
-        
+        return self._attributes
+
 
 # -----------------------------------------------------------------------------
 # SPSCellReference
@@ -728,7 +783,7 @@ class SPSCellReference:
 
     """
 
-    def __init__ (self, descriptor, coloffset=0, rowoffset=0):
+    def __init__(self, descriptor, coloffset=0, rowoffset=0):
         """A cell can be defined either explicitly, e.g., H27, or with a variable, e.g.,
            query.personal_data.sw. Additionally, it can be defined with an
            offset in colummns and rows
@@ -746,39 +801,40 @@ class SPSCellReference:
         self._cell = None
 
 
-    def get_descriptor (self):
+    def get_descriptor(self):
         """ returns the descriptor of this cell"""
 
         return self._descriptor
-        
-    
-    def get_coloffset (self):
+
+
+    def get_coloffset(self):
         """ returns the column offset of this cell"""
 
         return self._coloffset
-        
-    
-    def get_rowoffset (self):
+
+
+    def get_rowoffset(self):
         """ returns the row offset of this cell"""
 
         return self._rowoffset
 
-    def __str__ (self):
+    def __str__(self):
         '''provides a human readable representation of the contents of this intance'''
 
         if self._coloffset or self._rowoffset:
-            output = self._descriptor + " + (" + str (self._coloffset) + ", " + str (self._rowoffset) + ")"
+            output = self._descriptor + \
+                " + (" + str(self._coloffset) + ", " + str(self._rowoffset) + ")"
         else:
             output = self._descriptor
 
-        # if this cell is already known 
+        # if this cell is already known
         if self._cell:
             return self._cell + ": " + output
 
         # otherwise return a textual interpretation of the contents of this instance
         return output
 
-    def execute (self, context):
+    def execute(self, context):
         """compute the exact location of this cell: if a variable is used, it is
         resolved with the context. Additionally, if an offset is given, it is
         applied as well.
@@ -789,22 +845,22 @@ class SPSCellReference:
 
         # is the descript a cell given explicitly? If so, use it directly,
         # otherwise, retrieve it from the context
-        if re.match ("[a-zA-Z]+\d+", self._descriptor):
+        if re.match(r'[a-zA-Z]+\d+', self._descriptor):
             self._cell = self._descriptor
         else:
             if self._descriptor in context:
                 self._cell = context[self._descriptor]
             else:
-                raise ValueError (" The descriptor {0} was not found in the context {1}".format (self._descriptor, context))
+                raise ValueError(ERROR_DESCRIPTOR_NOT_FOUND.format(self._descriptor, context))
 
         # now, once the location is known, apply the offset
-        self._cell = structs.add_columns (self._cell, self._coloffset)
-        self._cell = structs.add_rows (self._cell, self._rowoffset)
-        
+        self._cell = structs.add_columns(self._cell, self._coloffset)
+        self._cell = structs.add_rows(self._cell, self._rowoffset)
+
         # and return the cell
         return self._cell
-    
-    
+
+
 # -----------------------------------------------------------------------------
 # SPSCommand
 #
@@ -815,7 +871,7 @@ class SPSCommand:
 
     """
 
-    def __init__ (self, name, crange, ctype, content):
+    def __init__(self, name, crange, ctype, content):
 
         '''a command consists of writing data into the spreadsheet in the given range,
            given as a tuple of two instances of SPSCellReference. Commands are
@@ -832,38 +888,38 @@ class SPSCommand:
 
         self._name, self._range, self._type, self._content = name, crange, ctype, content
 
-    def get_name (self):
+    def get_name(self):
         '''return the name of this command'''
 
         return self._name
 
-    def get_range (self):
+    def get_range(self):
         '''return the range of this command'''
 
         return self._range
 
-    def get_type (self):
+    def get_type(self):
         '''return the type of this command'''
 
         return self._type
 
-    def get_content (self):
+    def get_content(self):
         '''return the content of this command'''
 
         return self._content
 
-        
+
 # -----------------------------------------------------------------------------
 # SPSLiteral
 #
 # Definition of a command which consists of inserting literals
 # -----------------------------------------------------------------------------
-class SPSLiteral (SPSCommand):
+class SPSLiteral(SPSCommand):
     """Definition of a command which consists of inserting literals
 
     """
 
-    def __init__ (self, name, crange, content, direction=None):
+    def __init__(self, name, crange, content, direction=None):
         '''a literal consists of inserting the given content in an arbitrary number of
            cells. Importantly, literals can contain variables in the form
            $<text>.<text>.<text> which should be resolved within the given
@@ -882,28 +938,29 @@ class SPSLiteral (SPSCommand):
         '''
 
         # create an instance invoking the constructor of the base class
-        super (SPSLiteral, self).__init__(name=name, crange=crange, ctype='literal', content=content)
+        super(SPSLiteral, self).__init__(name=name, crange=crange, ctype='literal', content=content)
         self._direction = direction
-        
-    def __str__ (self):
+
+    def __str__(self):
         '''provides a human readable representation of the contents of this intance'''
 
         output = "\t"
-        
-        if self._name:
-            output += "Literal '{0}'".format (self._name)
-        else:
-            output+= "Explicit Literal"
 
-        output += " with contents '{0}' in range {1} : {2}".format (self._content.get_data (), self._range[0], self._range[1])
+        if self._name:
+            output += "Literal '{0}'".format(self._name)
+        else:
+            output += "Explicit Literal"
+
+        output += " with contents '{0}' in range {1} : {2}".format(self._content.get_data(),
+                                                                   self._range[0], self._range[1])
 
         if self._content._attributes:
-            output += " and attributes {0}".format (self._content._attributes)
+            output += " and attributes {0}".format(self._content._attributes)
 
         return output
-    
 
-    def execute (self, data, context):
+
+    def execute(self, data, context):
         '''executes this literal updating the contents of the array given in 'data' and
            the current 'context'. It returns two components, a dynamic array
            with the contents that should be modified in the spreadsheet and a
@@ -917,23 +974,23 @@ class SPSLiteral (SPSCommand):
 
         # first of all, compute the range of cells where this command should be
         # executed
-        rnge = structs.Range ([self._range[0].execute (context), self._range[1].execute (context)])
+        rnge = structs.Range([self._range[0].execute(context), self._range[1].execute(context)])
 
         # The value to write in this cell is, initially, the data stored in it
-        value = self._content.get_data ()
-        
+        value = self._content.get_data()
+
         # in case, and only in case, that this literal is either a string or a
         # formula, then it might be necessary to evaluate its contents and to
         # perform substitutions
-        if self._content.get_type () in ['text', 'formula']:
+        if self._content.get_type() in ['text', 'formula']:
 
             # now, perform all necessay substitutions. First, those where
             # variables appear along with an offset
-            value = evaluate (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, value)
-        
+            value = evaluate(r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, value)
+
             # next, substitute the occurrence of all variables which do not come
             # with an offset
-            value = substitute (r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, value)
+            value = substitute(r'[a-zA-Z_]+\.[a-zA-Z_]+\.[a-zA-Z_]+', context, value)
 
         # now, initialize the indices to the four corners of the region where this
         # literal is about to be executed
@@ -944,59 +1001,59 @@ class SPSLiteral (SPSCommand):
         for cell in rnge:
 
             # get the column and row of this cell
-            (column, row) = structs.get_columnrow (cell)
+            (column, row) = structs.get_columnrow(cell)
 
             # and update the corners of this region
-            left = min (structs.get_columnindex (column), left)
-            right = max (structs.get_columnindex (column), right)
-            top = min (row, top)
-            bottom = max (row, bottom)
+            left = min(structs.get_columnindex(column), left)
+            right = max(structs.get_columnindex(column), right)
+            top = min(row, top)
+            bottom = max(row, bottom)
 
             # and now provide support to formulas by dragging the literal to be
             # inserted. Compute the offset from the beginning of this range of
             # this cell
-            if self._content.get_type () == 'formula':
-                offset = structs.sub_cells (rnge._start, cell)
-                value = drag (offset, value)
+            if self._content.get_type() == 'formula':
+                offset = structs.sub_cells(rnge.get_start(), cell)
+                value = drag(offset, value)
 
             # finally, insert the contents of this literal with the contents
             # that result after all modifications performed here but preserving
             # the type and attributes recognized by the parser
-            data[cell] = SPSCellContent (value, self._content.get_type (),
-                                         self._content.get_attributes ())
+            data[cell] = SPSCellContent(value, self._content.get_type(),
+                                        self._content.get_attributes())
 
         # update now the context only in case this is a named literal
         if self._name:
             prefix = "literal." + self._name +  "."
 
             # first, the four corners
-            context [prefix + "nw"] = structs.get_columnname (left) + str (top)
-            context [prefix + "ne"] = structs.get_columnname (right) + str (top)
-            context [prefix + "sw"] = structs.get_columnname (left) + str (bottom)
-            context [prefix + "se"] = structs.get_columnname (right) + str (bottom)
+            context[prefix + "nw"] = structs.get_columnname(left) + str(top)
+            context[prefix + "ne"] = structs.get_columnname(right) + str(top)
+            context[prefix + "sw"] = structs.get_columnname(left) + str(bottom)
+            context[prefix + "se"] = structs.get_columnname(right) + str(bottom)
 
             # and now the mid points in the four sides
-            context [prefix + "north"] = structs.get_columnname ((left + right) / 2) + str (top)
-            context [prefix + "south"] = structs.get_columnname ((left + right) / 2) + str (bottom)
-            context [prefix + "west"]  = structs.get_columnname (left) + str (int ((top+bottom) / 2))
-            context [prefix + "east"]  = structs.get_columnname (right) + str (int ((top+bottom) / 2))
+            context[prefix + "north"] = structs.get_columnname((left + right) / 2) + str(top)
+            context[prefix + "south"] = structs.get_columnname((left + right) / 2) + str(bottom)
+            context[prefix + "west"] = structs.get_columnname(left) + str(int((top+bottom) / 2))
+            context[prefix + "east"] = structs.get_columnname(right) + str(int((top+bottom) / 2))
 
         # and return the contents created by the execution of this litral
-        return (data, context)
-    
-        
+        return(data, context)
+
+
 # -----------------------------------------------------------------------------
 # SPSQuery
 #
 # Definition of a command which consists of inserting the result of a
 # sql query
 # -----------------------------------------------------------------------------
-class SPSQuery (SPSCommand):
+class SPSQuery(SPSCommand):
     """Definition of a command which consists of inserting the result of a sql query
 
     """
 
-    def __init__ (self, name, crange, content, dbref = None, direction=None):
+    def __init__(self, name, crange, content, dbref=None, direction=None):
         '''a query consists of inserting the result of a sql query in an arbitrary
            number of cells from a given database if provided ---otherwise, it
            will be computed later. As there might be an arbitrary number of
@@ -1014,38 +1071,38 @@ class SPSQuery (SPSCommand):
         # first of all, make sure that the data given in the content is of type
         # 'text'. This same thing could be done in the parser, but it seems much
         # easier here
-        if content.get_type () != 'text':
-            raise TypeError (" The type of the following query is not of type 'text': {0}".format (self))
-        
+        if content.get_type() != 'text':
+            raise TypeError(ERROR_QUERY_NOT_TEXT.format(self))
+
         # create an instance invoking the constructor of the base class
-        super (SPSQuery, self).__init__(name=name, crange=crange, ctype='query', content=content)
+        super(SPSQuery, self).__init__(name=name, crange=crange, ctype='query', content=content)
         self._dbref = dbref
         self._direction = direction
 
-    def __str__ (self):
+    def __str__(self):
         '''provides a human readable representation of the contents of this intance'''
 
-        output = "\tQuery '{0}' with contents '{1}' in range {2} : {3}".format (self._name, self._content.get_data (), self._range [0], self._range [1])
+        output = "\tQuery '{0}' with contents '{1}' in range {2} : {3}".format(self._name, self._content.get_data(), self._range[0], self._range[1])
 
         if self._direction:
-            output += " with direction {0}".format (self._direction)
+            output += " with direction {0}".format(self._direction)
 
         if self._content._attributes:
-            output += " and attributes {0}".format (self._content._attributes)
+            output += " and attributes {0}".format(self._content._attributes)
 
         return output
 
-    def get_direction (self):
+    def get_direction(self):
         '''return the direction of this command'''
 
         return self._direction
 
-    def get_dbref (self):
+    def get_dbref(self):
         '''return the specific database to use when executing this query'''
 
         return self._dbref
 
-    def execute (self, data, context, dbname=None):
+    def execute(self, data, context, dbname=None):
         '''executes the result of this query by updating the contents of the given array
            using the given database (unless this query has been created wrt a
            specific database; in such a case, that specific database is used
@@ -1064,28 +1121,27 @@ class SPSQuery (SPSCommand):
 
         # first of all, compute the range of cells where this command should be
         # executed
-        rnge = structs.Range ([self._range[0].execute (context), self._range[1].execute (context)])
-        
+        rnge = structs.Range([self._range[0].execute(context), self._range[1].execute(context)])
+
         # initialize the indices to the four corners of the region where this
         # query is about to be executed
         (left, top) = (sys.maxsize, sys.maxsize)
         (bottom, right) = (0, 0)
-        
+
         # if this query has been defined with regard to a specific database then
         # use that one; otherwise, use the given database and raise an error if
         # none can be found
         dbref = self._dbref if self._dbref else dbname
         if not dbref:
-            raise ValueError ("""Fatal error - No database has been found for executing the following query:
- {0}""".format (self))
+            raise ValueError(ERROR_DB_NOT_FOUND.format(self))
 
         # get a cursor to it
-        conn = sqlite3.connect (dbref)
-        cursor = conn.cursor ()
-                    
+        conn = sqlite3.connect(dbref)
+        cursor = conn.cursor()
+
         # query the database
-        cursor.execute (self._content.get_data () [1:-1])
-        result = cursor.fetchall ()
+        cursor.execute(self._content.get_data()[1:-1])
+        result = cursor.fetchall()
 
         # for all tuples in the result of the query
         for value in result:
@@ -1094,13 +1150,13 @@ class SPSQuery (SPSCommand):
             for i, cell in enumerate(rnge):
 
                 # get the column and row of this cell
-                (column, row) = structs.get_columnrow (cell)
+                (column, row) = structs.get_columnrow(cell)
 
                 # and update the corners of this region
-                left = min (structs.get_columnindex (column), left)
-                right = max (structs.get_columnindex (column), right)
-                top = min (row, top)
-                bottom = max (row, bottom)
+                left = min(structs.get_columnindex(column), left)
+                right = max(structs.get_columnindex(column), right)
+                top = min(row, top)
+                bottom = max(row, bottom)
 
                 # write the index-th value of this tuple in this cell. While it
                 # might be tempting to preserve the type of this content from
@@ -1115,36 +1171,39 @@ class SPSQuery (SPSCommand):
                 #
                 # Thus, we derive the type from the content and we explicitly
                 # cast it into it
-                tvalue = cast_value (value[i], get_type (value[i]))
-                data [cell] = SPSCellContent (tvalue, get_type (value[i]), self._content._attributes)
+                tvalue = cast_value(value[i], get_type(value[i]))
+                data[cell] = SPSCellContent(tvalue, get_type(value[i]),
+                                            self._content.get_attributes())
 
             # update the range by sliding it in the given direction
             if self._direction == 'down':
-                rnge = rnge.add_rows (rnge.number_of_rows ())
+                rnge = rnge.add_rows(rnge.number_of_rows())
             else:
-                rnge = rnge.add_columns (rnge.number_of_columns ())
+                rnge = rnge.add_columns(rnge.number_of_columns())
 
         # update now the context only in case this is a named literal
         prefix = "query." + self._name +  "."
-        
+
         # first, the four corners
-        context [prefix + "nw"] = structs.get_columnname (left) + str (top)
-        context [prefix + "ne"] = structs.get_columnname (right) + str (top)
-        context [prefix + "sw"] = structs.get_columnname (left) + str (bottom)
-        context [prefix + "se"] = structs.get_columnname (right) + str (bottom)
-        
+        context[prefix + "nw"] = structs.get_columnname(left) + str(top)
+        context[prefix + "ne"] = structs.get_columnname(right) + str(top)
+        context[prefix + "sw"] = structs.get_columnname(left) + str(bottom)
+        context[prefix + "se"] = structs.get_columnname(right) + str(bottom)
+
         # and now the mid points in the four sides. Note that in case the cell
         # in the middle is an odd number, the largest integer below it is
         # selected
-        context [prefix + "north"] = structs.get_columnname (math.floor ((left + right) / 2)) + str (top)
-        context [prefix + "south"] = structs.get_columnname (math.floor ((left + right) / 2)) + str (bottom)
-        context [prefix + "west"]  = structs.get_columnname (left) + str (int ((top+bottom) / 2))
-        context [prefix + "east"]  = structs.get_columnname (right) + str (int ((top+bottom) / 2))
+        context[prefix + "north"] = structs.get_columnname(math.floor((left + right) / 2)) + \
+            str(top)
+        context[prefix + "south"] = structs.get_columnname(math.floor((left + right) / 2)) + \
+            str(bottom)
+        context[prefix + "west"] = structs.get_columnname(left) + str(int((top+bottom) / 2))
+        context[prefix + "east"] = structs.get_columnname(right) + str(int((top+bottom) / 2))
 
         # and return the new data
-        return (data, context)
-    
-        
+        return(data, context)
+
+
 # -----------------------------------------------------------------------------
 # SPSRegistry
 #
@@ -1157,7 +1216,7 @@ class SPSRegistry:
 
     """
 
-    def __init__ (self, command=None):
+    def __init__(self, command=None):
         '''when creating a registry either a command or none has to be given. Commands
            should be given as instances of SPSCommand (or any of its subtypes)
 
@@ -1166,54 +1225,52 @@ class SPSRegistry:
         # init the list of commands if any is given
         self._registry = []
         if command:
-            self._registry.append (command)
+            self._registry.append(command)
 
         # also init the private counter used for iterating the registry
-        self._ith = 0        
-    
-    def __add__ (self, other):
+        self._ith = 0
+
+    def __add__(self, other):
         '''extends this registry with all commands in the other registry'''
 
         self._registry += other._registry
         return self
-    
-    def __iter__ (self):
+
+    def __iter__(self):
         '''defines the simplest case for iterators'''
-        
+
         return self
 
-    def __next__ (self):
+    def __next__(self):
         '''returns the next command in this registry
 
         '''
 
         # if we did not reach the limit
-        if self._ith < len (self._registry):
+        if self._ith < len(self._registry):
 
             # return the current command after incrementing the
             # private counter
-            command = self._registry [self._ith]
+            command = self._registry[self._ith]
             self._ith += 1
             return command
-            
-        else:
-            
-            # restart the iterator for subsequent invocations of it
-            self._ith = 0
 
-            # and stop the current iteration
-            raise StopIteration ()
+        # restart the iterator for subsequent invocations of it
+        self._ith = 0
 
-    def __str__ (self):
+        # and stop the current iteration
+        raise StopIteration()
+
+    def __str__(self):
         '''provides a human readable representation of the contents of this intance'''
 
-        output = str ()
+        output = str()
         for command in self._registry:
-            output += "{0}\n".format (command)
+            output += "{0}\n".format(command)
 
         return output
 
-    def execute (self, dbname=None):
+    def execute(self, dbname=None):
         '''executes all commands in this registry from data in the given
            database if any is given and returns an array of contents
            to insert into the spreadsheet
@@ -1222,25 +1279,25 @@ class SPSRegistry:
 
         # a registry keeps a context with different variables with the regions
         # filled by the queries and literals in it.
-        context = dict ()
-        
+        context = dict()
+
         # initialize a dynamic array to store all contents created by
         # the execution of all commands in this registry
-        contents = DynamicArray ()
+        contents = DynamicArray()
 
         # for all commands in this registry
         for command in self._registry:
 
             # add the contents created by the execution of this command
-            if command.get_type () == 'literal':
-                (contents, context) = command.execute (contents, context)
+            if command.get_type() == 'literal':
+                (contents, context) = command.execute(contents, context)
             else:
-                (contents, context) = command.execute (contents, context, dbname)
+                (contents, context) = command.execute(contents, context, dbname)
 
         # return all contents
         return contents
-    
-    
+
+
 # -----------------------------------------------------------------------------
 # SPSSpreadsheet
 #
@@ -1255,11 +1312,11 @@ class SPSSpreadsheet:
 
     """
 
-    def __init__ (self, registry, spsname = None, sheetname = None, dbref = None):
-        '''An instance of SPSRegistry has to be given to create the contents
-of a spreadsheet. The combination spreadsheet filename/sheet name and
-the reference database to use are not mandatory as these could be
-supplied by other means.
+    def __init__(self, registry, spsname=None, sheetname=None, dbref=None):
+        '''An instance of SPSRegistry has to be given to create the contents of a
+           spreadsheet. The combination spreadsheet filename/sheet name and the
+           reference database to use are not mandatory as these could be
+           supplied by other means.
 
         '''
 
@@ -1268,18 +1325,18 @@ supplied by other means.
         self._spsname, self._sheetname = spsname, sheetname
         self._dbref = dbref
 
-    def __str__ (self):
+    def __str__(self):
         '''provides a human readable representation of the contents of this intance'''
 
-        output = str ()
-        output += " Spreadsheet: {0}\n".format (self._spsname if self._spsname else "<Unknown>")
-        output += " Sheet name : {0}\n".format (self._sheetname if self._sheetname else "<Unknown>")
-        output += " Database   : {0}\n".format (self._dbref if self._dbref else "<Unknown>")
-        output += "\n Registry   :\n{0}".format (self._registry)
+        output = str()
+        output += " Spreadsheet: {0}\n".format(self._spsname if self._spsname else "<Unknown>")
+        output += " Sheet name : {0}\n".format(self._sheetname if self._sheetname else "<Unknown>")
+        output += " Database   : {0}\n".format(self._dbref if self._dbref else "<Unknown>")
+        output += "\n Registry   :\n{0}".format(self._registry)
 
         return output
 
-    def execute (self, dbname = None, spsname = None, sheetname = None, override=False):
+    def execute(self, dbname=None, spsname=None, sheetname=None, override=False):
         '''executes all commands in the registry of this spreadsheet. It returns a tuple
            with the name of the spreadsheet that should be updated and a dict
            with only one key, the name of the spreadsheet and a dynamic array
@@ -1300,7 +1357,7 @@ supplied by other means.
 
         '''
 
-        def _default_handler (external, internal, msg=None):
+        def _default_handler(external, internal, msg=None):
             '''determine the default value to use from two different values: an external
             value and an internal value. If necessary, "override" is used to
             solve ties. In case it is not possible to compute a value, raise an
@@ -1314,40 +1371,39 @@ supplied by other means.
             else:                                       # if both are given
                 value = external if override else internal      # use override to decide
             if msg and not value:                       # if no value was found and a msg is given
-                raise ValueError ("""Fatal error - {0}:
- {1}""".format (msg, self._registry))                     # raise an error
+                raise ValueError(ERROR_FATAL_ERROR.format(msg, self._registry))
 
             return value                                # and return the value computed so far
-            
+
         # first of all, determine the db, spreadsheet and sheetname to use
 
         # --dbref
-        dbref = _default_handler (dbname, self._dbref, "No database was given to execute the following commands")
+        dbref = _default_handler(dbname, self._dbref, ERROR_NO_DB)
 
         # --spsname
-        spsref = _default_handler (spsname, self._spsname, "No spreadsheet was given to store the results of executing the following commands")
+        spsref = _default_handler(spsname, self._spsname, ERROR_NO_SPREADSHEET)
 
         # --sheetname
-        sheetnameref = _default_handler (sheetname, self._sheetname)
+        sheetnameref = _default_handler(sheetname, self._sheetname)
 
         # If no sheetname is computed then "Unnamed" is used by default
         if not sheetnameref:
             sheetnameref = "Unnamed"
 
-        print (" Creating '{0}:{1}' ...".format (spsref, sheetnameref))
-        
+        print(LITERAL_CREATING_SPREADSHEET.format(spsref, sheetnameref))
+
         # and now execute all commands in the current registry. The result is an
         # array of contents to insert into the spreadsheet
-        contents = self._registry.execute (dbref)
+        contents = self._registry.execute(dbref)
 
         # and now, create a dictionary with the contents of this sheet
-        sheet = dict ()
-        sheet [sheetnameref] = contents.get_data ()
+        sheet = dict()
+        sheet[sheetnameref] = contents.get_data()
 
         # and return a tuple: first with the filename that should contain this
         # sheet; ssecond, its contents
-        return (spsref, sheet)
-        
+        return(spsref, sheet)
+
 
 # -----------------------------------------------------------------------------
 # SPSBook
@@ -1359,7 +1415,7 @@ class SPSBook:
 
     """
 
-    def __init__ (self, sps = None):
+    def __init__(self, sps=None):
         '''A table can be created empty but, if given, it is initialized with
            an instance of SPSSpreadsheet
 
@@ -1368,55 +1424,53 @@ class SPSBook:
         # init the book if a spreadsheet is given
         self._book = []
         if sps:
-            self._book.append (sps)
+            self._book.append(sps)
 
         # also init the private counter used for iterating
-        self._ith = 0        
-    
-    def __add__ (self, other):
+        self._ith = 0
+
+    def __add__(self, other):
         '''extends this book with all spreadsheets in a different table'''
 
         self._book += other._book
         return self
-    
-    def __iter__ (self):
+
+    def __iter__(self):
         '''defines the simplest case for iterators'''
-        
+
         return self
 
-    def __next__ (self):
+    def __next__(self):
         '''returns the next spreadsheet in this book
 
         '''
 
         # if we did not reach the limit
-        if self._ith < len (self._book):
+        if self._ith < len(self._book):
 
             # return the current spreadsheet after incrementing the
             # private counter
-            sps = self._book [self._ith]
+            sps = self._book[self._ith]
             self._ith += 1
             return sps
-            
-        else:
-            
-            # restart the iterator for subsequent invocations of it
-            self._ith = 0
 
-            # and stop the current iteration
-            raise StopIteration ()
+        # restart the iterator for subsequent invocations of it
+        self._ith = 0
 
-    def __str__ (self):
+        # and stop the current iteration
+        raise StopIteration()
+
+    def __str__(self):
         '''provides a human readable representation of the contents of this intance'''
 
-        output = str ()
+        output = str()
         for sps in self._book:
-            output += "{0}\n".format (sps)
+            output += "{0}\n".format(sps)
 
         return output
 
 
-    def write_to_pyexcel (self, filename, contents):
+    def write_to_pyexcel(self, filename, contents):
         '''use pyexcel to create a spreadsheet with the given filename and the specified
            contents. The contents consist of a dictionary where the keys are the
            sheetname and the value consists of a list of lists, each one
@@ -1430,35 +1484,35 @@ class SPSBook:
 
         '''
 
-        # create a book for this spreadsheet 
-        book = pyexcel.Book ()
+        # create a book for this spreadsheet
+        book = pyexcel.Book()
 
         # process the contents
-        pyexcel_bookdict = dict ()            # create a dict to store all sheets
-        for key, data in contents.items ():
-            pyexcel_contents = list ()        # data to write to this sheet
+        pyexcel_bookdict = dict()            # create a dict to store all sheets
+        for key, data in contents.items():
+            pyexcel_contents = list()        # data to write to this sheet
             for row in data:                  # for each row starting from 1
                 irow = []                     # create a new list for this row
                 for cell in row:              # and ach column in this row
                     if cell:                  # if there are contents, write'em
-                        irow.append (cell.get_data ())
+                        irow.append(cell.get_data())
                     else:
-                        irow.append (None)    # otherwise, leave them empty
-                pyexcel_contents.append (irow)
+                        irow.append(None)    # otherwise, leave them empty
+                pyexcel_contents.append(irow)
 
             # and now add these contents to a new sheet as required by pyexcel
             # where the index is the sheetname and the contents are those just
             # processed
-            pyexcel_bookdict [key] = pyexcel_contents
+            pyexcel_bookdict[key] = pyexcel_contents
 
         # write data to the spreadsheet
         book.bookdict = pyexcel_bookdict
 
         # and save its contents to this file
-        book.save_as (filename)
-        
-    
-    def write_to_xlsxwriter (self, filename, contents):
+        book.save_as(filename)
+
+
+    def write_to_xlsxwriter(self, filename, contents):
         '''use xlsxwriter to create a spreadsheet with the given filename and the
            specified contents. The contents consist of a dictionary where the
            keys are the sheetname and the value consists of a list of lists,
@@ -1470,60 +1524,58 @@ class SPSBook:
         '''
 
         # create a book for this spreadsheet
-        book = xlsxwriter.Workbook (filename)
+        book = xlsxwriter.Workbook(filename)
 
         # process the contents
-        for key, data in contents.items ():
+        for key, data in contents.items():
 
             # create a new spreadsheet with the name given in contents
-            sheet = book.add_worksheet (key)
+            sheet = book.add_worksheet(key)
 
             # for each row for which we keep track of its index
-            for norow, row in zip (list (range (len (data))), data):
+            for norow, row in zip(list(range(len(data))), data):
 
                 # and also, for each column for which we keep track of its index
-                for nocol, cell in zip (list (range (len (row))), row):
+                for nocol, cell in zip(list(range(len(row))), row):
                     if cell:
 
-                        # print (" Processing {0}".format (cell))
-                        
                         # in case a format was specified for this cell, create a
                         # format for it. Otherwise, leave it empty!!
-                        if cell._attributes:
-                            attrs = book.add_format (cell.get_attributes ()._attributes)
+                        if cell.get_attributes():
+                            attrs = book.add_format(cell.get_attributes().get_attributes())
                         else:
-                            attrs = book.add_format ()
-                        
+                            attrs = book.add_format()
+
                         # use the proper write_ command according to the type of
                         # contents of this cell
-                        if cell.get_type () == 'text':
-                            sheet.write_string (norow, nocol, cell.get_data (), attrs)
-                        elif cell.get_type () in ['integer', 'real']:
-                            sheet.write_number (norow, nocol, cell.get_data (), attrs)
-                        elif cell.get_type () in ['datetime', 'date']:
+                        if cell.get_type() == 'text':
+                            sheet.write_string(norow, nocol, cell.get_data(), attrs)
+                        elif cell.get_type() in ['integer', 'real']:
+                            sheet.write_number(norow, nocol, cell.get_data(), attrs)
+                        elif cell.get_type() in ['datetime', 'date']:
 
                             # date/time formats can be shown in a variety of
                             # ways. In case the user did not provide a specific
                             # format, one is assumed by default
-                            if not cell.get_attributes () or \
-                               'num_format' not in cell.get_attributes ()._attributes:
+                            if not cell.get_attributes() or \
+                               'num_format' not in cell.get_attributes().get_attributes():
 
-                                if cell.get_type () == 'date':
-                                    attrs.set_num_format ('DD-MM-YYYY')
-                                if cell.get_type () == 'datetime':
-                                    attrs.set_num_format ('DD-MM-YYYY HH:MM:SS')
+                                if cell.get_type() == 'date':
+                                    attrs.set_num_format('DD-MM-YYYY')
+                                if cell.get_type() == 'datetime':
+                                    attrs.set_num_format('DD-MM-YYYY HH:MM:SS')
 
-                            sheet.write_datetime (norow, nocol, cell.get_data (), attrs)
-                        elif cell.get_type () == 'formula':
-                            sheet.write_formula (norow, nocol, cell.get_data (), attrs)
+                            sheet.write_datetime(norow, nocol, cell.get_data(), attrs)
+                        elif cell.get_type() == 'formula':
+                            sheet.write_formula(norow, nocol, cell.get_data(), attrs)
                         else:
-                            raise ValueError (" Unknown cell type: {0}".format (cell.get_type ()))
+                            raise ValueError(ERROR_UNKNOWN_CELL_TYPE.format(cell.get_type()))
 
         # close the workbook
-        book.close ()
+        book.close()
 
-        
-    def execute (self, dbname = None, spsname = None, sheetname = None, override=False):
+
+    def execute(self, dbname = None, spsname = None, sheetname = None, override=False):
         '''executes all commands in the registry of all spreadsheets in this
            book effectively inserting data into the given
            spreadsheet/sheet name from data in the given database if
@@ -1543,14 +1595,14 @@ class SPSBook:
 
         # create a dictionary which should contain the books for each file that
         # should be generated
-        files = dict ()
-        
+        files = dict()
+
         # for all spreadsheets in this book
         for sps in self._book:
 
             # execute all commands in the registry of this specific
             # spreadsheet
-            (filename, sheet) = sps.execute (dbname, spsname, sheetname, override)
+            (filename, sheet) = sps.execute(dbname, spsname, sheetname, override)
 
             # if this is the first sheet generated in this spreadsheet
             if filename not in files:
@@ -1563,30 +1615,27 @@ class SPSBook:
 
                 # if a sheet already exists in this spreadsheet with the same
                 # name
-                if list(sheet.keys ())[0] in files[filename]:
-
-                    raise ValueError (" The file '{0}' already contains a sheet named '{1}'".format (filename, list(sheet.keys ())[0]))
+                if list(sheet.keys())[0] in files[filename]:
+                    raise ValueError(ERROR_DUP_NAME.format(filename, list(sheet.keys())[0]))
 
                 # otherwise, add this sheet to this spreadsheet
-                else:
-                    
-                    files[filename].update (sheet)
+                files[filename].update(sheet)
 
         # now, iterate over all files to generate
-        for spreadsheet in files.keys ():
+        for spreadsheet in files.keys():
 
             # if this is an excel 2007 or xlsx file then use xlswriter
-            if re.match (".*\.xls[x]?", spreadsheet):
+            if re.match(r'.*\.xls[x]?', spreadsheet):
 
-                self.write_to_xlsxwriter (spreadsheet, files[spreadsheet])
+                self.write_to_xlsxwriter(spreadsheet, files[spreadsheet])
 
             else:
 
-                self.write_to_pyexcel (spreadsheet, files[spreadsheet])
-                
+                self.write_to_pyexcel(spreadsheet, files[spreadsheet])
 
-            
-    
+
+
+
 # Local Variables:
 # mode:python
 # fill-column:80

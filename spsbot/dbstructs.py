@@ -27,6 +27,38 @@ import sys                              # exit
 
 import pyexcel
 
+
+# globals
+# -----------------------------------------------------------------------------
+
+# -- errors
+ERROR = " Error - {0}"
+ERROR_CAST_COLUMN = "It was not possible to cast the default value '{0}' defined for column '{1}' to the type '{2}'"
+ERROR_CAST_DBCOLUMN = "It was not possible to cast the value '{0}' in database '{1}::{2}' to the type {3}"
+ERROR_CAST_CELL = "It was not possible to cast the value '{0}' found in cell {1} in database '{2}::{3}' to the type {4}"
+ERROR_EXTENT = "It is not possible to extend column '{0}' which contains {1} items to hold {2} items"
+ERROR_NO_DATA = "No data was found in cell '{0}' in database '{1}::{2}'"
+ERROR_DIFF_BLOCKS = """The block
+{0}
+
+is not equal to the block
+
+{1}"""
+ERROR_UNSPECIFIED_TYPE = """
+The block
+
+{0} contains columns with unspecified types"""
+ERROR_TABLE_EXISTS = " Table '{0}' already exists"
+ERROR_NO_SPREADSHEET = " No spreadsheet has been given"
+ERROR_FILE_EXISTS = " The file '{0}' already exists!"
+
+# -- warnings
+WARNING = " Warning - {0}"
+
+# -- literals
+STR_DBCOLUMN = "\t Name  : {0}\n\t Contents : {1}\n\t Type  : {2}\n\t Action: {3}"
+
+
 # classes
 # -----------------------------------------------------------------------------
 
@@ -79,15 +111,15 @@ error. Additionally, in the first two cases, default values shall be specified
         if self._action == 'Error':                             # in case of error
 
             # issue a message and exit
-            print(" Error - {0}".format(message))
+            print(ERROR.format(message))
             sys.exit(0)
 
         elif self._action == 'Warning':                         # in case of warning
 
             # show a warning message and use the default value defined for this
             # column
-            print(" Warning - {0}".format(message))
-            data =  self._default
+            print(WARNING.format(message))
+            data = self._default
 
         # if it is neither an error mpr a warning, silently copy the default
         # value defined in the action of this column
@@ -95,7 +127,7 @@ error. Additionally, in the first two cases, default values shall be specified
 
         # if the default value is None then just return that, otherwise cast the
         # default value to the specified type
-        if self._default != None:
+        if self._default is not None:
 
             # before returning ensure that the default value can be casted into the
             # type specified for this column
@@ -112,7 +144,7 @@ error. Additionally, in the first two cases, default values shall be specified
             except:
 
                 # if it was not possible then exit with an error
-                print(" Fatal Error - It was not possible to cast the default value '{0}' defined for column '{1}' to the type '{2}'".format(data, name, ctype))
+                print(ERROR_CAST_COLUMN.format(data, name, ctype))
                 sys.exit(0)
 
         # finally, return the default value as computed here
@@ -215,12 +247,10 @@ class DBRanges:
                 # then point to the next interval and return the first item
                 return next(self)
 
-            else:
-
-                # if there are no more intervals then stop the iteration, but
-                # first restart the counter
-                self._ith = 0
-                raise StopIteration
+            # if there are no more intervals then stop the iteration, but
+            # first restart the counter
+            self._ith = 0
+            raise StopIteration
 
 
     def get(self, position=-1):
@@ -271,7 +301,7 @@ class DBColumn:
     def __str__(self):
         '''provides a human-readable description of the contents of this column'''
 
-        return "\t Name  : {0}\n\t Contents : {1}\n\t Type  : {2}\n\t Action: {3}".format(self._name, self._contents, self._type, self._action)
+        return STR_DBCOLUMN.format(self._name, self._contents, self._type, self._action)
 
     def get_name(self):
         '''returns the name of this column'''
@@ -293,6 +323,11 @@ class DBColumn:
 
         return self._action
 
+    def get_data(self):
+        '''return the data in this column'''
+
+        return self._data
+
     def extend(self, length):
         '''replicates the length of this column only in case it consists of just one
         item to have as many as 'length'. In case the column currently has a
@@ -311,7 +346,7 @@ class DBColumn:
 
         elif len(self._data) != length:
 
-            print(" Fatal Error in DBColumn::extend. It is not possible to extend column '{0}' which contains {1} items to hold {2} items".format(self._name, len(self._data), length))
+            print(ERROR_EXTENT.format(self._name, len(self._data), length))
             sys.exit(0)
 
         # and return the new container
@@ -350,7 +385,11 @@ class DBColumn:
 
                 # then apply the action specified in this column as well and
                 # retrieve the default value
-                data = self.handle_action(self._name, self._type, "It was not possible to cast the value '{0}' found in cell {1} in database '{2}::{3}' to the type {4}".format(data, cell, spsname, sheetname, self._type))
+                data = self._action.handle_action(self._name, self._type,
+                                                  ERROR_CAST_DBCOLUMN.format(data,
+                                                                             spsname,
+                                                                             sheetname,
+                                                                             self._type))
 
             # and add this data to the result
             self._data = [data]
@@ -386,7 +425,10 @@ class DBColumn:
 
                     # then apply the action specified in this column and retrieve
                     # the default value to use
-                    data = self._action.handle_action(self._name, self._type, "No data was found in cell '{0}' in database '{1}::{2}'".format(cell, spsname, sheetname))
+                    data = self._action.handle_action(self._name, self._type,
+                                                      ERROR_NO_DATA.format(cell,
+                                                                           spsname,
+                                                                           sheetname))
 
                 # if a value is found in this cell but ...
                 else:
@@ -407,7 +449,12 @@ class DBColumn:
 
                         # then apply the action specified in this column as well and
                         # retrieve the default value
-                        data = self.handle_action(self._name, self._type, "It was not possible to cast the value '{0}' found in cell {1} in database '{2}::{3}' to the type {4}".format(data, cell, spsname, sheetname, self._type))
+                        data = self._action.handle_action(self._name, self._type,
+                                                          ERROR_CAST_CELL.format(data,
+                                                                                 cell,
+                                                                                 spsname,
+                                                                                 sheetname,
+                                                                                 self._type))
 
                 # and add this data to the result
                 self._data.append(data)
@@ -437,6 +484,11 @@ class DBBlock:
 
         # copy the attributes
         self._columns = columns
+
+    def get_columns(self):
+        """return the columns of this block"""
+
+        return self._columns
 
     def __eq__(self, other):
         '''one block is equal to another if and only if they have the same columns
@@ -473,7 +525,7 @@ class DBBlock:
 
             # look up this specific table
             column.lookup(spsname, sheetname)
-            maxlen = max(maxlen, len(column._data))
+            maxlen = max(maxlen, len(column.get_data()))
 
         # now, make sure that all columns have the same length
         for column in self._columns:
@@ -487,7 +539,7 @@ class DBBlock:
         for irow in range(maxlen):                      # for all rows
             row = tuple()                               # start with an empty tuple
             for column in self._columns:
-                row += (column._data[irow],)            # add this value
+                row += (column.get_data()[irow],)       # add this value
 
             # make sure now no field in this row is "None". This can happen when
             # a cell is empty and no default value was given in the database
@@ -589,7 +641,7 @@ class DBTable:
             # if the next column is already in the current block
             if self._columns[1 + icolumn] in curr:
 
-                # then the current block should be ended 
+                # then the current block should be ended
                 self._blocks.append(DBBlock(curr))
 
                 # and initialize again the current block
@@ -614,19 +666,14 @@ class DBTable:
 
             if self._blocks[iblock] != self._blocks[1+iblock]:
 
-                raise ValueError('''The block
-{0} is not equal to the block 
-
-{1}'''.format(self._blocks[iblock], self._blocks[1+iblock]))
+                raise ValueError(ERROR_DIFF_BLOCKS.format(self._blocks[iblock],
+                                                          self._blocks[1+iblock]))
 
         # finally, the first block should be correct, i.e., the type of all its
         # columns should have been specified, since that is the specific block
         # to use for both creating the table and inserting data into it
         if not self._blocks[0].validate():
-            raise TypeError('''
-The block 
-
-{0} contains columns with unspecified types'''.format(self._blocks[0]))
+            raise TypeError(ERROR_UNSPECIFIED_TYPE.format(self._blocks[0]))
 
 
     def __str__(self):
@@ -641,6 +688,12 @@ The block
             output += "{0}\n".format(block)
 
         return output                           # return the output string
+
+    def get_blocks(self):
+        """return the number of blocks of this table"""
+
+        return self._blocks
+
 
     def get(self, position=-1):
         '''if no position is given, it returns the list of columns of this instance. In
@@ -690,18 +743,18 @@ The block
             # otherwise, it is not an error, and there is no need to create it
             # as it already exists
             if not append:
-                raise ValueError(" Table '{0}' already exists".format(self._name))
+                raise ValueError(ERROR_TABLE_EXISTS.format(self._name))
 
         else:
 
             cmdline = 'CREATE TABLE ' + self._name + ' ('
-            for column in self._blocks[0]._columns[:-1]:    # for all columns but the last one
-                cmdline += column.get_name() + ' '         # compose the name of the column
-                cmdline += column.get_type() + ', '        # its type and a comma
+            for column in self._blocks[0].get_columns()[:-1]:    # for all columns but the last one
+                cmdline += column.get_name() + ' '               # compose the name of the column
+                cmdline += column.get_type() + ', '              # its type and a comma
 
             # do the same with the last one but with a closing parenthesis instead
-            cmdline += self._blocks[0]._columns[-1].get_name() + ' '
-            cmdline += self._blocks[0]._columns[-1].get_type() + ')'
+            cmdline += self._blocks[0].get_columns()[-1].get_name() + ' '
+            cmdline += self._blocks[0].get_columns()[-1].get_type() + ')'
 
             # and now, create the table
             cursor.execute(cmdline)
@@ -727,7 +780,7 @@ The block
 
         # create first the specification line to insert data into the sqlite3
         # database, which is derived from the schema of its first block
-        specline = "?, " *(len(self._blocks[0]._columns) - 1)
+        specline = "?, " *(len(self._blocks[0].get_columns()) - 1)
         cmdline = "INSERT INTO %s VALUES (%s)" % (self._name, specline + '?')
 
         # compute the right spreadsheet and sheetnames to use. If override is
@@ -737,13 +790,13 @@ The block
             # If a spreadsheet name or a sheet name were given during the creation
             # of the table in the configuration, use those; otherwise use the
             # specified parameters
-            spsname   = self._spreadsheet if self._spreadsheet else spsname
+            spsname = self._spreadsheet if self._spreadsheet else spsname
             sheetname = self._sheetname   if self._sheetname else sheetname
 
         # it might happen here that no spreadsheet has been found,
         if not spsname:
 
-            raise ValueError(" Fatal Error - no spreadsheet has been given")
+            raise ValueError(ERROR_NO_SPREADSHEET)
 
         # retrieve now data from the spreadsheet (and/or the given sheetname)
         # for each block in this table
@@ -775,6 +828,11 @@ class DBDatabase:
 
         self._expressions = expressions
         self._current = 0               # used to iterate over expressions
+
+        # other members are now intialized empty
+        self._dbname = None
+        self._conn = None
+        self._cursor = None
 
     def get(self, position=-1):
         '''if no position is given, it returns the list of expressions (both tables and
@@ -809,10 +867,10 @@ class DBDatabase:
 
             # and return the expression in the current position (after
             # incrementing)
-            next = self._expressions[self._current]
+            expr = self._expressions[self._current]
 
             self._current += 1                  # increment the counter
-            return next                         # and return this one
+            return expr                         # and return this one
 
         # restart the iterator for subsequent invocations of it
         self._current = 0
@@ -841,7 +899,7 @@ class DBDatabase:
 
         # make sure no file exists with the same name
         if os.access(dbname, os.F_OK):
-            raise ValueError(" The file '{0}' already exists!".format(dbname))
+            raise ValueError(ERROR_FILE_EXISTS.format(dbname))
 
         # create a connection to the database
         self._dbname = dbname                  # store the name of the database
