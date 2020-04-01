@@ -23,6 +23,14 @@ import math                             # pow
 import re                               # match
 
 
+# globals
+# -----------------------------------------------------------------------------
+
+# -- errors
+ERROR_ROWS_OUT_OF_RANGE = "add_rows ({0}, {1}) goes above the first row"
+ERROR_COLUMNS_OUT_OF_RANGE = "add_columns ({0}, {1}) goes beyond the left margin"
+
+
 # functions
 # -----------------------------------------------------------------------------
 
@@ -178,7 +186,7 @@ def add_rows (cellname, value):
 
     # verify you are not below the first row
     if row + value < 1:
-        raise ValueError (" add_rows ({0}, {1}) goes above the first row".format (cellname, value))
+        raise ValueError (ERROR_ROWS_OUT_OF_RANGE.format (cellname, value))
     
     # return the name of a cell which is a given number of rows below
     # the current one
@@ -203,7 +211,7 @@ def add_columns (cellname, value):
 
     # verify you are not below the first column
     if get_columnindex (column) + value < 0:
-        raise ValueError (" add_columns ({0}, {1}) goes beyond the left margin".format (cellname, value))
+        raise ValueError (ERROR_COLUMNS_OUT_OF_RANGE.format (cellname, value))
     
     # return the name of a cell which is a given number of columns below
     # the current one

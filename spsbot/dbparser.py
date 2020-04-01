@@ -27,6 +27,14 @@ import ply.yacc as yacc
 from . import structs
 from . import dbstructs
 
+# globals
+# -----------------------------------------------------------------------------
+
+# -- errors
+ERROR_INVALID_CHAR = "Illegal character '{0}'"
+ERROR_SYNTAX_ERROR = " Syntax error in line {0} near '{1}': unexpected token {2} found"
+
+
 # classes
 # -----------------------------------------------------------------------------
 
@@ -166,7 +174,7 @@ class DBParser:
     # Error handling rule
     def t_error(self, t):
 
-        print("Illegal character '%s'" % t.value[0])
+        print(ERROR_INVALID_CHAR.format(t.value[0]))
         t.lexer.skip(1)
 
     # grammar rules
@@ -339,7 +347,7 @@ class DBParser:
     # -----------------------------------------------------------------------------
     # Error rule for syntax errors
     def p_error(self, p):
-        print(" Syntax error in line {0} near '{1}': unexpected token {2} found".format(p.lineno, p.value, p.type))
+        print(ERROR_SYNTAX_ERROR.format(p.lineno, p.value, p.type))
         print()
         sys.exit()
 
