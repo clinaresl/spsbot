@@ -272,20 +272,9 @@ class DBParser:
                        | content COMMA contentlist'''
 
         if len(p) == 2:
-
-            # distinguish between a range and content explicitly given
-            if isinstance(p[1], dbstructs.DBExplicit):
-                p[0] = p[1]
-            else:
-                p[0] = dbstructs.DBRanges([p[1]])
+            p[0] = dbstructs.DBContents([p[1]])
         else:
-
-            # likewise, either ranges or contents explicitly given can be
-            # concatenated into a list
-            if isinstance(p[1], dbstructs.DBExplicit):
-                p[0] = p[1] + p[3]
-            else:
-                p[0] = dbstructs.DBRanges([p[1]]) + p[3]
+            p[0] = dbstructs.DBContents([p[1]]) + p[3]
 
     # contents are either cells, or regions, or values explicitly given
     def p_content(self, p):
