@@ -242,11 +242,14 @@ class DBParser:
         elif len(p) == 3:
             p[0] = [p[1]] + p[2]
 
+    # columns consists of an ID for the column in the database, the contents to
+    # write, and optionally a type of the column and/or an action to execute in
+    # case the content specified is not available
     def p_column(self, p):
-        '''column : ID content SEMICOLON
-                  | ID content type SEMICOLON
-                  | ID content action SEMICOLON
-                  | ID content type action SEMICOLON'''
+        '''column : ID contentlist SEMICOLON
+                  | ID contentlist type SEMICOLON
+                  | ID contentlist action SEMICOLON
+                  | ID contentlist type action SEMICOLON'''
 
         if len(p) == 4:
             p[0] = dbstructs.DBColumn(p[1], p[2], None, None)
@@ -262,13 +265,46 @@ class DBParser:
         if len(p) == 6:
             p[0] = dbstructs.DBColumn(p[1], p[2], p[3], p[4])
 
-    # the definition of columns accepts data coming either from the spreadsheet
-    # (as a sequence of regions), or given explicitly
-    def p_content(self, p):
-        '''content : rangelist
-                   | explicit'''
+    # when specifying the contents of a database, it is possible to give an
+    # arbitrary number of them as specified in contentlist
+    def p_contentlist(self, p):
+        '''contentlist : content
+                       | content COMMA contentlist'''
 
-        p[0] = p[1]
+        if len(p) == 2:
+
+            # distinguish between a range and content explicitly given
+            if isinstance(p[1], dbstructs.DBExplicit):
+                p[0] = p[1]
+            else:
+                p[0] = dbstructs.DBRanges([p[1]])
+        else:
+
+            # likewise, either ranges or contents explicitly given can be
+            # concatenated into a list
+            if isinstance(p[1], dbstructs.DBExplicit):
+                p[0] = p[1] + p[3]
+            else:
+                p[0] = dbstructs.DBRanges([p[1]]) + p[3]
+
+    # contents are either cells, or regions, or values explicitly given
+    def p_content(self, p):
+        '''content : explicit
+                   | CELL
+                   | CELL COLON CELL'''
+
+        if len(p) == 2:
+
+            # if this was a content given explicitly, then return it immediately
+            if isinstance(p[1], dbstructs.DBExplicit):
+                p[0] = p[1]
+            else:
+
+                # otherwise, it is a cell. Create a range with only this cell
+                # after removing first the heading '$'
+                p[0] = structs.Range([p[1][1:], p[1][1:]])
+        else:
+            p[0] = structs.Range([p[1][1:], p[3][1:]])
 
     # data explicitly given is defined literally, as much as when defining
     # default values. The difference though is that data has to go encapsulated
@@ -277,25 +313,6 @@ class DBParser:
         '''explicit : default'''
 
         p[0] = dbstructs.DBExplicit(p[1])
-
-    def p_rangelist(self, p):
-        '''rangelist : range
-                     | range COMMA rangelist'''
-
-        if len(p) == 2:
-            p[0] = dbstructs.DBRanges([p[1]])
-        else:
-            p[0] = dbstructs.DBRanges([p[1]]) + p[3]
-
-    def p_range(self, p):
-        '''range : CELL
-                 | CELL COLON CELL'''
-
-        # return this range removing first the heading '$'
-        if len(p) == 2:
-            p[0] = structs.Range([p[1][1:], p[1][1:]])
-        else:
-            p[0] = structs.Range([p[1][1:], p[3][1:]])
 
     # note that the only allowed types are numbers (either integers or
     # floating-point numbers), strings and time specifications

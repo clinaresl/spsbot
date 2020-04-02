@@ -196,7 +196,7 @@ class DBRanges:
 
     def __init__(self, intervals):
         '''defines a list of intervals, each of the form [start, end]. All intervals
-           should be instances of DBRange
+           should be instances of Range
 
         '''
 

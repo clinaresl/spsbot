@@ -21,7 +21,6 @@ reads data from a spreadsheet and writes it into a sqlite3 database
 from . import sps2dbparser      # command-line parser
 from . import dbparser          # database parser
 
-
 # main
 #
 # parses the command line and start a session to write data into the selected
