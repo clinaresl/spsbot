@@ -23,6 +23,7 @@ import argparse                 # argument parsing
 import sys                      # system accessing
 
 from . import dbparser
+from . import preprocessor
 from . import version
 
 # globals
@@ -30,7 +31,7 @@ from . import version
 
 # -- errors
 
-ERROR_NO_SPEC_FILE = " no database specification file! Make sure to invoke --parse-db *after* --configuration"
+ERROR_NO_SPEC_FILE = " no database specification file! Make sure to invoke --parse-db/--show-templates/--generate-conf *after* --configuration"
 
 # -----------------------------------------------------------------------------
 # ShowDatabaseSpec
@@ -59,6 +60,76 @@ class ShowDatabaseSpec(argparse.Action):
  Contents of the database specification file:
  --------------------------------------------""")
         print(database)
+
+        # and finally exit
+        sys.exit(0)
+
+
+# -----------------------------------------------------------------------------
+# ShowTemplates
+#
+# shows a comprehensive output of all templates found in the configuration file
+# -----------------------------------------------------------------------------
+class ShowTemplates(argparse.Action):
+    """shows a comprehensive output of all templates found in the configuration
+    file
+
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+
+        # if no test was provided, exit with a manual error
+        if not namespace.configuration:
+            parser.error(ERROR_NO_SPEC_FILE)
+            sys.exit(0)
+
+        # pre-process the configuration file
+        pragma = preprocessor.PRGProcessor(namespace.configuration)
+        pragma.subst_templates()
+
+        # and show them on the standard output
+
+        # otherwise, process the file through the main entry point provided in
+        # dbtools and exit
+        print("""
+ Templates:
+ --------------------------------------------
+""")
+        for itemplate in pragma:
+            print(itemplate)
+            print()
+
+        # and finally exit
+        sys.exit(0)
+
+
+# -----------------------------------------------------------------------------
+# GenerateConfFile
+#
+# generates a configuration file after applying all templates
+# -----------------------------------------------------------------------------
+class GenerateConfFile(argparse.Action):
+    """generates a configuration file after applying all templates
+
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+
+        # if no test was provided, exit with a manual error
+        if not namespace.configuration:
+            parser.error(ERROR_NO_SPEC_FILE)
+            sys.exit(0)
+
+        # pre-process the configuration file
+        pragma = preprocessor.PRGProcessor(namespace.configuration)
+        pragma.subst_templates()
+
+        # and create the configuration file given in values to show the text
+        # that results after performing all substitutions
+        with open(values, 'w') as stream:
+            stream.write(pragma.get_text())
+
+        print(" Configuration file '{0}' generated ...".format(values))
 
         # and finally exit
         sys.exit(0)
@@ -119,6 +190,13 @@ class Sps2DBParser():
                                 nargs=0,
                                 action=ShowDatabaseSpec,
                                 help="processes the database specification file, shows the resulting definitions and exits")
+        self._misc.add_argument('-t', '--show-templates',
+                                nargs=0,
+                                action=ShowTemplates,
+                                help="shows all templates found in the configuration file on the standard output after making all the necessary substitutions")
+        self._misc.add_argument('-g', '--generate-conf',
+                                action=GenerateConfFile,
+                                help="generates a configuration file after applying all templates")
         self._misc.add_argument('-q', '--quiet',
                                 action='store_true',
                                 help="suppress headers")

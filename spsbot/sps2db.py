@@ -36,16 +36,7 @@ def main():
 
     # preprocess the configuration file
     pragma = preprocessor.PRGProcessor(args.configuration)
-
-    for itemplate in pragma.get_templates():
-        print(itemplate)
-
-    pragma._subst_templates()
-    print("----------------------------------")
-    print(pragma.get_text())
-    print("----------------------------------")
-    import sys
-    sys.exit(0)
+    pragma.subst_templates()
 
     # create a database session and parse its contents
     session = dbparser.FileDBParser()

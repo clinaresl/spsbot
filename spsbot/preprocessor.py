@@ -202,7 +202,10 @@ class PRGProcessor:
         with open(self._configfile, encoding="utf-8") as fstream:
             self._contents = fstream.read()
 
-        # initialize the list of templates found in this configuration file
+        # initialize the list of templates found in this configuration file and
+        # also the count of templates when using the iterator provided by this
+        # class
+        self._ith = 0
         self._templates = []
 
         # initialize also the text of the config file stripped of the templates
@@ -211,6 +214,31 @@ class PRGProcessor:
         # and look for all its templates
         self._find_templates()
 
+
+    def __iter__(self):
+        '''defines the simplest case for iterators'''
+
+        return self
+
+    def __next__(self):
+        '''returns the next template in this configuration file
+
+        '''
+
+        # if we did not reach the limit
+        if self._ith < len(self._templates):
+
+            # return the template in the current position (after incrementing)
+            itemplate = self._templates[self._ith]
+
+            self._ith += 1                      # increment the counter
+            return itemplate                    # and return this one
+
+        # restart the iterator for subsequent invocations of it
+        self._ith = 0
+
+        # and stop the current iteration
+        raise StopIteration()
 
     def _find_templates(self):
         """search for the definition of templates in the configuration file and updates
@@ -251,7 +279,7 @@ class PRGProcessor:
         self._text += self._contents[index:]
 
 
-    def _subst_templates(self):
+    def subst_templates(self):
         """"substitute all references to all templates in the text of the configuration
             file
 
