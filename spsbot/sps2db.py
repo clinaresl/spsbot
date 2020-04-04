@@ -18,6 +18,7 @@ reads data from a spreadsheet and writes it into a sqlite3 database
 
 # imports
 # -----------------------------------------------------------------------------
+from . import preprocessor      # preprocessor of configuration files
 from . import sps2dbparser      # command-line parser
 from . import dbparser          # database parser
 
@@ -32,6 +33,19 @@ def main():
 
     # parse the command-line
     args = sps2dbparser.Sps2DBParser().parse_args()
+
+    # preprocess the configuration file
+    pragma = preprocessor.PRGProcessor(args.configuration)
+
+    for itemplate in pragma.get_templates():
+        print(itemplate)
+
+    pragma._subst_templates()
+    print("----------------------------------")
+    print(pragma.get_text())
+    print("----------------------------------")
+    import sys
+    sys.exit(0)
 
     # create a database session and parse its contents
     session = dbparser.FileDBParser()

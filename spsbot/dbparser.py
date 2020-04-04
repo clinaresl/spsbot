@@ -418,7 +418,9 @@ class FileDBParser(DBParser):
 
         with open(filename, encoding="utf-8") as fstream:
 
-            return self._parser.parse(fstream.read(), lexer=self._lexer)
+            contents = fstream.read()
+
+            return self._parser.parse(contents, lexer=self._lexer)
 
 
 
