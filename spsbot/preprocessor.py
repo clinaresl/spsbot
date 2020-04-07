@@ -27,13 +27,13 @@ import re
 # -----------------------------------------------------------------------------
 
 # --regexp
-REGEXP_TEMPLATE = r"template\s+[a-zA-Z0-9_]+\s*\(\s*\w*(,\s*\w+)*\s*\)\s*\{[^\}]+\}"
-REGEXP_TEMPLATE_GROUPS = r"template\s+(?P<name>[a-zA-Z0-9_]+)\s*\(\s*(?P<args>\w*(,\s*\w+\s*)*)\s*\)\s*\{(?P<body>[^\}]+)\}"
+REGEXP_TEMPLATE = r"template\s+[a-zA-Z0-9_]+\s*\(\s*[^\n\r\t,)]*(,\s*[^\n\r\t,)]+)*\s*\)\s*\{[^\}]+\}"
+REGEXP_TEMPLATE_GROUPS = r"template\s+(?P<name>[a-zA-Z0-9_]+)\s*\(\s*(?P<args>[^\n\r\t,)]*(,\s*[^\n\r\t,)]+\s*)*)\s*\)\s*\{(?P<body>[^\}]+)\}"
 
 # the following regexp is to be used with string.Template for substituting the
 # name of each template
-REGEXP_TEMPLATE_CALL = r"$name\s*\(\w*(,\s*\w+\s*)*\)"
-REGEXP_ARGS = r"\(\s*(?P<args>\w*(,\s*\w+\s*)*)\s*\)"
+REGEXP_TEMPLATE_CALL = r"$name\s*\([^\n\r\t,)]*(,\s*[^\n\r\t,)]+\s*)*\)"
+REGEXP_ARGS = r"\(\s*(?P<args>[^\n\r\t,)]*(,\s*[^\n\r\t,)]+\s*)*)\s*\)"
 
 # --errors
 TEMPLATE_SYNTAX_ERROR = "Syntax error in template {0}"
