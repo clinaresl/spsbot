@@ -373,7 +373,7 @@ class VerbatimDBParser(DBParser):
         Just parse the given string
         """
 
-        self._tables = self._parser.parse(data, lexer=self._lexer)
+        return self._parser.parse(data, lexer=self._lexer)
 
 
 # -----------------------------------------------------------------------------

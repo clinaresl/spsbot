@@ -38,9 +38,9 @@ def main():
     pragma = preprocessor.PRGProcessor(args.configuration)
     pragma.subst_templates()
 
-    # create a database session and parse its contents
-    session = dbparser.FileDBParser()
-    database = session.run(args.configuration)
+    # create a database session and parse the output of the preprocessor
+    session = dbparser.VerbatimDBParser()
+    database = session.run(pragma.get_text())
 
     # now, create the sqlite3 database and writes data into it
     database.create(args.db, args.append)
