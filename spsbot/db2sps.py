@@ -36,14 +36,17 @@ def main():
     args = db2spsparser.DB2SPSParser().parse_args()
 
     # preprocess the configuration file
+    print(" Preprocessing ...")
     pragma = preprocessor.PRGProcessor(args.configuration)
     pragma.subst_templates()
 
     # create a database session and parse the output of the preprocessor
+    print(" Parsing ...")
     session = spsparser.VerbatimSPSParser()
     book = session.run(pragma.get_text())
 
     # now, create the sqlite3 database and writes data into it
+    print(" Processing ...")
     book.execute(args.db, args.spreadsheet, args.sheetname, args.override)
 
 

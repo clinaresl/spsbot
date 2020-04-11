@@ -35,15 +35,20 @@ def main():
     args = sps2dbparser.Sps2DBParser().parse_args()
 
     # preprocess the configuration file
+    print(" Preprocessing ...")
     pragma = preprocessor.PRGProcessor(args.configuration)
     pragma.subst_templates()
 
     # create a database session and parse the output of the preprocessor
+    print(" Parsing ...")
     session = dbparser.VerbatimDBParser()
     database = session.run(pragma.get_text())
 
     # now, create the sqlite3 database and writes data into it
+    print(" Creating the database ...")
     database.create(args.db, args.append)
+
+    print(" Inserting data into the database ...")
     database.insert(args.db, args.spreadsheet, args.sheetname, args.override, args.append)
 
 

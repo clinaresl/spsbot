@@ -401,14 +401,15 @@ class DBColumn:
             # spreadsheet
             elif isinstance(content, structs.Range):
 
+                # first, gain access to the spreadsheet
+                if not sheetname:
+                    sheet = pyexcel.get_sheet(file_name=spsname)
+                    sheetname = sheet.name          # and copy the first sheet's name
+                else:
+                    sheet = pyexcel.get_sheet(file_name=spsname, sheet_name=sheetname)
+
                 # now, for all cells in this range
                 for cell in content:
-
-                    if not sheetname:
-                        sheet = pyexcel.get_sheet(file_name=spsname)
-                        sheetname = sheet.name          # and copy the first sheet's name
-                    else:
-                        sheet = pyexcel.get_sheet(file_name=spsname, sheet_name=sheetname)
 
                     # access the data
                     try:
@@ -528,6 +529,8 @@ class DBBlock:
 
         # iterate over all columns to look up the spreadsheet
         for column in self._columns:
+
+            print(" \t > Looking up column {0}".format(column.get_name()))
 
             # look up this specific table
             column.lookup(spsname, sheetname)
