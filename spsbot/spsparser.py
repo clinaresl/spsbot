@@ -568,6 +568,24 @@ class SPSParser:
 
 
 # -----------------------------------------------------------------------------
+# VerbatimSPSParser
+#
+# Class used to process a verbatim string
+# -----------------------------------------------------------------------------
+class VerbatimSPSParser(SPSParser):
+    """
+    Class used to process a verbatim string
+    """
+
+    def run(self, data):
+        """
+        Just parse the given string
+        """
+
+        return self._parser.parse(data, lexer=self._lexer)
+
+
+# -----------------------------------------------------------------------------
 # InteractiveSPSParser
 #
 # Class used to run the parser in interactive mode

@@ -23,14 +23,22 @@ import argparse                 # argument parsing
 import sys                      # system accessing
 
 from . import spsparser
+from . import preprocessor
 from . import version
 
+# globals
 # -----------------------------------------------------------------------------
-# ShowDatabaseSpec
+
+# -- errors
+
+ERROR_NO_SPEC_FILE = " no spreadsheet specification file! Make sure to invoke --parse-sps/--show-templates/--generate-conf *after* --configuration"
+
+# -----------------------------------------------------------------------------
+# ShowSpsSpec
 #
 # shows a comprehensive output of the specification of the spreadsheet
 # -----------------------------------------------------------------------------
-class ShowDatabaseSpec(argparse.Action):
+class ShowSpsSpec(argparse.Action):
     """
     shows a comprehensive output of the specification of the spreadsheet
     """
@@ -39,7 +47,7 @@ class ShowDatabaseSpec(argparse.Action):
 
         # if no test was provided, exit with a manual error
         if not namespace.configuration:
-            parser.error(" no spreadsheet specification file! Make sure to invoke --parse-sps *after* --configuration")
+            parser.error(ERROR_NO_SPEC_FILE)
             sys.exit(0)
 
         # parse the database
@@ -52,6 +60,76 @@ class ShowDatabaseSpec(argparse.Action):
  Contents of the spreadsheet specification file:
  --------------------------------------------""")
         print(book)
+
+        # and finally exit
+        sys.exit(0)
+
+
+# -----------------------------------------------------------------------------
+# ShowTemplates
+#
+# shows a comprehensive output of all templates found in the configuration file
+# -----------------------------------------------------------------------------
+class ShowTemplates(argparse.Action):
+    """shows a comprehensive output of all templates found in the configuration
+    file
+
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+
+        # if no test was provided, exit with a manual error
+        if not namespace.configuration:
+            parser.error(ERROR_NO_SPEC_FILE)
+            sys.exit(0)
+
+        # pre-process the configuration file
+        pragma = preprocessor.PRGProcessor(namespace.configuration)
+        pragma.subst_templates()
+
+        # and show them on the standard output
+
+        # otherwise, process the file through the main entry point provided in
+        # dbtools and exit
+        print("""
+ Templates:
+ --------------------------------------------
+""")
+        for itemplate in pragma:
+            print(itemplate)
+            print()
+
+        # and finally exit
+        sys.exit(0)
+
+
+# -----------------------------------------------------------------------------
+# GenerateConfFile
+#
+# generates a configuration file after applying all templates
+# -----------------------------------------------------------------------------
+class GenerateConfFile(argparse.Action):
+    """generates a configuration file after applying all templates
+
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+
+        # if no test was provided, exit with a manual error
+        if not namespace.configuration:
+            parser.error(ERROR_NO_SPEC_FILE)
+            sys.exit(0)
+
+        # pre-process the configuration file
+        pragma = preprocessor.PRGProcessor(namespace.configuration)
+        pragma.subst_templates()
+
+        # and create the configuration file given in values to show the text
+        # that results after performing all substitutions
+        with open(values, 'w') as stream:
+            stream.write(pragma.get_text())
+
+        print(" Configuration file '{0}' generated ...".format(values))
 
         # and finally exit
         sys.exit(0)
@@ -105,8 +183,15 @@ class DB2SPSParser():
         self._misc = self._parser.add_argument_group('Miscellaneous')
         self._misc.add_argument('-b', '--parse-sps',
                                 nargs=0,
-                                action=ShowDatabaseSpec,
+                                action=ShowSpsSpec,
                                 help="processes the spreadsheet specification file, shows the resulting definitions and exits")
+        self._misc.add_argument('-t', '--show-templates',
+                                nargs=0,
+                                action=ShowTemplates,
+                                help="shows all templates found in the configuration file on the standard output after making all the necessary substitutions")
+        self._misc.add_argument('-g', '--generate-conf',
+                                action=GenerateConfFile,
+                                help="generates a configuration file after applying all templates")
         self._misc.add_argument('-q', '--quiet',
                                 action='store_true',
                                 help="suppress headers")

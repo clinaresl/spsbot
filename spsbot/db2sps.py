@@ -19,6 +19,7 @@ automatically fills in data from a database in a spreadsheet
 
 # imports
 # -----------------------------------------------------------------------------
+from . import preprocessor      # preprocessor of configuration files
 from . import db2spsparser      # command-line parser
 from . import spsparser         # spreadsheet parser
 
@@ -34,9 +35,13 @@ def main():
     # parse the command-line
     args = db2spsparser.DB2SPSParser().parse_args()
 
-    # create a database session and parse its contents
-    session = spsparser.FileSPSParser()
-    book = session.run(args.configuration)
+    # preprocess the configuration file
+    pragma = preprocessor.PRGProcessor(args.configuration)
+    pragma.subst_templates()
+
+    # create a database session and parse the output of the preprocessor
+    session = spsparser.VerbatimSPSParser()
+    book = session.run(pragma.get_text())
 
     # now, create the sqlite3 database and writes data into it
     book.execute(args.db, args.spreadsheet, args.sheetname, args.override)
