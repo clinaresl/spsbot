@@ -21,6 +21,8 @@ parsed from a db file
 
 # imports
 # -----------------------------------------------------------------------------
+from collections import defaultdict
+
 import os                               # access
 import sqlite3
 import sys                              # exit
@@ -59,7 +61,7 @@ WARNING = " Warning - {0}"
 
 # -- literals
 STR_DBCOLUMN = "\t Name    : {0}\n\t Contents: {1}\n\t Type    : {2}\n\t Action  : {3}"
-
+DUPLICATED_ROW = "Duplicated row: {0}"
 
 # classes
 # -----------------------------------------------------------------------------
@@ -567,6 +569,11 @@ class DBBlock:
 
             column.extend(maxlen)
 
+        # in preparation to create rows (by aligning the data of all columns),
+        # create a default dict that registers the number of occurrences of each
+        # row. This dictionary is then used by modifiers unique/check_duplicates
+        unique = defaultdict(int)
+
         # all columns are now the same length. Create a list of tuples, where
         # each tuple is a row in this database, i.e., a value from each column in
         # the same position
@@ -580,6 +587,19 @@ class DBBlock:
             # a cell is empty and no default value was given in the database
             # specification file. These have to be skipped
             if None not in row:
+
+                # register this row
+                unique[row] += 1
+
+                # if this row has been inserted before, ...
+                if unique[row] > 1:
+
+                    # if check-duplicates was requested
+                    if 'check_duplicates' in self._modifiers:
+                        print(DUPLICATED_ROW.format(row))
+                    if 'unique' in self._modifiers:
+                        continue
+
                 data.append(row)                       # and add this tuple
 
         # and return all data retrieved from the spreadsheet in the form of a
