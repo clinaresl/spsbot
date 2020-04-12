@@ -61,7 +61,9 @@ class DBParser:
         'text'      : 'TEXT',
         'None'      : 'NONE',
         'Warning'   : 'WARNING',
-        'Error'     : 'ERROR'
+        'Error'     : 'ERROR',
+        'unique'    : 'UNIQUE',
+        'check_duplicates' : 'CHECK_DUPLICATES'
         }
 
     # List of token names. This is always required
@@ -217,10 +219,13 @@ class DBParser:
 
     # definition of data tables
     # -----------------------------------------------------------------------------
+
+    # In short, a database table consists of a single block along with other
+    # information
     def p_table(self, p):
-        '''table : ID LCURBRACK columns RCURBRACK
-                 | ID USING STRING LCURBRACK columns RCURBRACK
-                 | ID USING STRING COLON STRING LCURBRACK columns RCURBRACK'''
+        '''table : ID LCURBRACK block RCURBRACK
+                 | ID USING STRING LCURBRACK block RCURBRACK
+                 | ID USING STRING COLON STRING LCURBRACK block RCURBRACK'''
 
         if len(p) == 5:
             p[0] = dbstructs.DBTable(p[1], None, None, p[3])
@@ -232,6 +237,38 @@ class DBParser:
 
             # remove the double quotes in the spreadsheet name and the sheetname
             p[0] = dbstructs.DBTable(p[1], p[3][1:-1], p[5][1:-1], p[7])
+
+
+    # a block consists of a collection of columns along with modifiers. Mote
+    # that modifiers can not be writtern interspersed between the columns:
+    # modifiers must prefix columns
+    def p_block(self, p):
+        '''block : columns
+                 | modifiers columns'''
+
+        if len(p) == 2:
+            p[0] = dbstructs.DBBlock(p[1])
+        else:
+            p[0] = dbstructs.DBBlock(p[2], p[1])
+
+
+    # modifiers can be given as a semicolon-separated list of modifiers. They
+    # are returned as a list of strings
+    def p_modifiers(self, p):
+        '''modifiers : modifier
+                     | modifier modifiers'''
+
+        if len(p) == 2:
+            p[0] = [p[1]]
+        else:
+            p[0] = [p[1]] + p[2]
+
+    # the acknowledged modifiers are shown next
+    def p_modifier(self, p):
+        '''modifier : UNIQUE SEMICOLON
+                    | CHECK_DUPLICATES SEMICOLON'''
+
+        p[0] = p[1]
 
     def p_columns(self, p):
         '''columns : column

@@ -50,9 +50,13 @@ class ShowDatabaseSpec(argparse.Action):
             parser.error(ERROR_NO_SPEC_FILE)
             sys.exit(0)
 
-        # parse the database
-        session = dbparser.FileDBParser()
-        database = session.run(namespace.configuration)
+        # preprocess the configuration file
+        pragma = preprocessor.PRGProcessor(namespace.configuration)
+        pragma.subst_templates()
+
+        # parse the contents of the configuration file after preprocessing it
+        session = dbparser.VerbatimDBParser()
+        database = session.run(pragma.get_text())
 
         # otherwise, process the file through the main entry point provided in
         # dbtools and exit

@@ -58,7 +58,7 @@ ERROR_FILE_EXISTS = " The file '{0}' already exists!"
 WARNING = " Warning - {0}"
 
 # -- literals
-STR_DBCOLUMN = "\t Name  : {0}\n\t Contents : {1}\n\t Type  : {2}\n\t Action: {3}"
+STR_DBCOLUMN = "\t Name    : {0}\n\t Contents: {1}\n\t Type    : {2}\n\t Action  : {3}"
 
 
 # classes
@@ -221,7 +221,7 @@ class DBContents:
 
         output = str()
         for interval in self._intervals:
-            output += "{0}; ".format(interval)
+            output += "{0}".format(interval)
 
         return output
 
@@ -488,20 +488,32 @@ class DBBlock:
     different columns
     """
 
-    def __init__(self, columns):
-        '''initializes a database table with the given name and information from all the
-        given columns, which shall be instances of DBColumn reading data from
-        the given sheetname in the specified spreadsheet
+    def __init__(self, columns, modifiers=None):
+        '''initializes a block as a sequence of columns. Columns shall be given as a
+           list of instances of DBColumn. Modifiers affect the behaviour of the
+           table.
+
+           Valid modifiers are the following:
+
+              * unique: discard duplicated rows without further ado
+
+              * check_duplicates: verifies that all rows are diff. If not, a
+                warning is shown but still all rows are inserted into the table
 
         '''
 
         # copy the attributes
-        self._columns = columns
+        self._columns, self._modifiers = columns, modifiers
 
     def get_columns(self):
         """return the columns of this block"""
 
         return self._columns
+
+    def get_modifiers(self):
+        """return the modifiers of this block"""
+
+        return self._modifiers
 
     def __eq__(self, other):
         '''one block is equal to another if and only if they have the same columns
@@ -518,6 +530,14 @@ class DBBlock:
         '''provides a human-readable description of the contents of this block'''
 
         output = str()                         # initialize the output string
+
+        # first, show the modifiers of this block, if any
+        if self._modifiers:
+            output += "\t Modifiers: \n"
+            for imodifier in self._modifiers:
+                output += "\t * {0}\n".format(imodifier)
+            output += "\n"
+
         for column in self._columns:
             output += "{0}\n\n".format(column)
 
@@ -603,6 +623,12 @@ class DBSQLStatement:
         return " SQL statement: '{0}'\n\n".format(self._statement)
 
 
+    def get_statement(self):
+        """return the SQL statement of this instance"""
+
+        return self._statement
+
+
     def exec(self, cursor):
         '''executes the SQL statement given to this instance through the specified sqlite3 cursor.
 
@@ -623,103 +649,48 @@ class DBTable:
     Provides the definition of a database table
     """
 
-    def __init__(self, name, spreadsheet, sheetname, columns):
-        '''initializes all blocks of a database table with the given name from the given
-           columns which should be a list of instances of DBColumn. A block is a
-           consecutive definition of different columns. A DBTable is used to
-           populate a sqlite3 database with information retrieved from the given
-           spreadsheet and sheetname ---and if no sheetname is given, then from
-           the first one found by default.
+    def __init__(self, name, spreadsheet, sheetname, block):
+        '''initializes a database table with the contents of a single block (which must
+           be an instance of DBBlock). A block is a consecutive definition of
+           different columns. A DBTable is used to populate a sqlite3 database
+           with information retrieved from the given spreadsheet and sheetname
+           ---and if no sheetname is given, then from the first one found by
+           default.
 
         '''
 
         # copy the attributes
-        self._name, self._columns = name, columns
+        self._name, self._block = name, block
         self._spreadsheet, self._sheetname = spreadsheet, sheetname
-
-        # a block consists of a consecutive definition of different
-        # columns. Thus, the given columns should be examined: if all of them
-        # are different then only one block should be constructed; if a column
-        # is repeated, a new block should be built. All blocks should contain
-        # columns in precisely the same order.
-
-        # initialize the list of blocks in this table
-        self._blocks = list()
-
-        # at least, the first column belongs to the first block
-        curr = [self._columns[0]]
-
-        # for all the other columns
-        icolumn = 0
-        while icolumn < len(self._columns) - 1:
-
-            # if the next column is already in the current block
-            if self._columns[1 + icolumn] in curr:
-
-                # then the current block should be ended
-                self._blocks.append(DBBlock(curr))
-
-                # and initialize again the current block
-                icolumn += 1
-                curr = [self._columns[icolumn]]
-
-            else:
-
-                # otherwise, this column should be added to the current block
-                curr.append(self._columns[1 + icolumn])
-
-                # and move to the next column
-                icolumn += 1
-
-        # at this point, curr should contain the last block which should be
-        # added to the list of blocks of this table
-        self._blocks.append(DBBlock(curr))
-
-        # verify now that all blocks are equal, i.e., that they contain the same
-        # columns (with the same name) in precisely the same order
-        for iblock in range(len(self._blocks) - 1):
-
-            if self._blocks[iblock] != self._blocks[1+iblock]:
-
-                raise ValueError(ERROR_DIFF_BLOCKS.format(self._blocks[iblock],
-                                                          self._blocks[1+iblock]))
-
-        # finally, the first block should be correct, i.e., the type of all its
-        # columns should have been specified, since that is the specific block
-        # to use for both creating the table and inserting data into it
-        if not self._blocks[0].validate():
-            raise TypeError(ERROR_BLOCK_UNSPECIFIED_TYPE.format(self._blocks[0]))
 
 
     def __str__(self):
         '''provides a human-readable description of the contents of this database'''
 
         output = str()                         # initialize the output string
-        output += " Name: {0}\n".format(self._name)
+        output += " Name       : {0}\n".format(self._name)
         output += " Spreadsheet: {0}\n".format(self.get_spreadsheet())
-        output += " Sheet name : {0}\n\n".format(self.get_sheetname())
-
-        for block in self._blocks:
-            output += "{0}\n".format(block)
+        output += " Sheet name : {0}\n".format(self.get_sheetname())
+        output += " Block      : \n{0}\n\n".format(self._block)
 
         return output                           # return the output string
 
-    def get_blocks(self):
+    def get_block(self):
         """return the number of blocks of this table"""
 
-        return self._blocks
+        return self._block
 
 
     def get(self, position=-1):
-        '''if no position is given, it returns the list of columns of this instance. In
-           case a non-negative value is provided as a position, then it returns
-           the column in that position
+        '''if no position is given, it returns the list of columns of the block in this
+           instance. In case a non-negative value is provided as a position,
+           then it returns the column in that position
 
         '''
 
         if position < 0:
-            return self._columns
-        return self._columns[position]
+            return self._block.get_columns()
+        return self._block.get_columns()[position]
 
     def get_name(self):
         '''returns the name of this table'''
@@ -741,8 +712,8 @@ class DBTable:
         return self._sheetname
 
     def create(self, cursor, append=False):
-        '''creates a sqlite3 database table with the schema of its first block with the
-           given name using the given sqlite3 cursor
+        '''creates a sqlite3 database table with the schema of its block with the given
+           name using the given sqlite3 cursor
 
            If append is True, data is added to the database so that tables might
            already exist; otherwise, an error is raised in case the same table
@@ -763,13 +734,13 @@ class DBTable:
         else:
 
             cmdline = 'CREATE TABLE ' + self._name + ' ('
-            for column in self._blocks[0].get_columns()[:-1]:    # for all columns but the last one
+            for column in self._block.get_columns()[:-1]:        # for all columns but the last one
                 cmdline += column.get_name() + ' '               # compose the name of the column
                 cmdline += column.get_type() + ', '              # its type and a comma
 
             # do the same with the last one but with a closing parenthesis instead
-            cmdline += self._blocks[0].get_columns()[-1].get_name() + ' '
-            cmdline += self._blocks[0].get_columns()[-1].get_type() + ')'
+            cmdline += self._block.get_columns()[-1].get_name() + ' '
+            cmdline += self._block.get_columns()[-1].get_type() + ')'
 
             # and now, create the table
             cursor.execute(cmdline)
@@ -795,7 +766,7 @@ class DBTable:
 
         # create first the specification line to insert data into the sqlite3
         # database, which is derived from the schema of its first block
-        specline = "?, " *(len(self._blocks[0].get_columns()) - 1)
+        specline = "?, " *(len(self._block.get_columns()) - 1)
         cmdline = "INSERT INTO %s VALUES (%s)" % (self._name, specline + '?')
 
         # compute the right spreadsheet and sheetnames to use. If override is
@@ -814,10 +785,8 @@ class DBTable:
             raise ValueError(ERROR_NO_SPREADSHEET)
 
         # retrieve now data from the spreadsheet (and/or the given sheetname)
-        # for each block in this table
-        data = list()
-        for block in self._blocks:
-            data += block.lookup(spsname, sheetname)
+        # for the block in this table
+        data = self._block.lookup(spsname, sheetname)
 
         # and insert data
         cursor.executemany(cmdline, data)
@@ -968,12 +937,14 @@ class DBDatabase:
             if isinstance(expression, DBTable):
 
                 # insert data into this table as commanded
+                print(" * Block {0}".format(expression.get_name()))
                 expression.insert(self._cursor, spsname, sheetname, override)
 
             # if and only if this is a SQL statement
             if isinstance(expression, DBSQLStatement):
 
                 # then execute it within the context of this database
+                print(" * SQL statement {0}".format(expression.get_statement()))
                 expression.exec(self._cursor)
 
         # close the database
@@ -984,4 +955,5 @@ class DBDatabase:
 # Local Variables:
 # mode:python
 # fill-column:80
+
 # End:
