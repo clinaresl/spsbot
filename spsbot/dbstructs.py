@@ -35,10 +35,10 @@ from . import structs
 # -- errors
 ERROR = " Error - {0}"
 ERROR_CAST_COLUMN = "It was not possible to cast the default value '{0}' defined for column '{1}' to the type '{2}'"
-ERROR_CAST_DBCOLUMN = "It was not possible to cast the value '{0}' in database '{1}::{2}' to the type {3}"
-ERROR_CAST_CELL = "It was not possible to cast the value '{0}' found in cell {1} in database '{2}::{3}' to the type {4}"
+ERROR_CAST_DBCOLUMN = "It was not possible to cast the value '{0}' in '{1}::{2}' to the type {3}"
+ERROR_CAST_CELL = "It was not possible to cast the value '{0}' found in cell {1} in '{2}::{3}' to the type {4}"
 ERROR_EXTENT = "It is not possible to extend column '{0}' which contains {1} items to hold {2} items"
-ERROR_NO_DATA = "No data was found in cell '{0}' in database '{1}::{2}'"
+ERROR_NO_DATA = "No data was found in cell '{0}' in '{1}::{2}'"
 ERROR_CONTENT_UNKNOWN_TYPE = "Unknown type for content {0}"
 ERROR_DIFF_BLOCKS = """The block
 {0}
@@ -76,12 +76,15 @@ class DBAction:
 
     def __init__(self, action, default=None):
 
-        '''an action consists of either ignoring (None), warning or issuing an
-error. Additionally, in the first two cases, default values shall be specified
+        '''an action consists of either ignoring (None), warning or issuing an error.
+           Additionally, in the first two cases, default values shall be
+           specified
 
         '''
 
+        # copy the attributes
         self._action, self._default = action, default
+
 
     def __str__(self):
         '''provides a human readable representation of the contents of this intance'''
@@ -93,15 +96,18 @@ error. Additionally, in the first two cases, default values shall be specified
         # otherwise return both the action and the default value
         return "{0} with default value: {1}".format(self._action, self._default)
 
+
     def get_action(self):
         '''return the action specified in this instance'''
 
         return self._action
 
+
     def get_default(self):
         '''return the default value of this action'''
 
         return self._default
+
 
     def handle_action(self, name, ctype, message=''):
         '''applies this action to a column named "name" which is defined to store values
@@ -123,7 +129,7 @@ error. Additionally, in the first two cases, default values shall be specified
             print(WARNING.format(message))
             data = self._default
 
-        # if it is neither an error mpr a warning, silently copy the default
+        # if it is neither an error nor a warning, silently copy the default
         # value defined in the action of this column
         data = self._default
 
@@ -352,7 +358,7 @@ class DBColumn:
 
     def lookup(self, spsname, sheetname=None):
         '''returns the contents of this column. If it consists of data explicitly given,
-           then it return it right away after casting it to the appropriate
+           then it returns it right away after casting it to the appropriate
            type; if the contents of this column consist of ranges of cells, then
            it access the spreadsheet to retrieve them
 

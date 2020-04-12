@@ -347,6 +347,12 @@ class DBParser:
                    | NUMBER
                    | STRING'''
 
+        # in case this is a quoted string, take care to remove the quotes
+        if isinstance(p[1], str) and (p[1][0] == '"' or p[1][0] == "'"):
+            p[1] = p[1][1:]
+        if isinstance(p[1], str) and (p[1][-1] == '"' or p[1][-1] == "'"):
+            p[1] = p[1][:-1]
+
         p[0] = p[1]
 
     # error handling
