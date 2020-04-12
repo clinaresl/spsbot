@@ -58,10 +58,14 @@ ERROR_FILE_EXISTS = " The file '{0}' already exists!"
 
 # -- warnings
 WARNING = " Warning - {0}"
+WARNING_DUPLICATED_ROW = " Warning - Duplicated row: {0}"
+WARNING_NOT_EQUAL = " Warning - {0} != {1} rows generated"
+WARNING_EQUAL = " Warning - {0} = {1} rows generated"
+WARNING_LESS = " Warning - {0} < {1} rows generated"
+WARNING_GREATER = " Warning - {0} > {1} rows generated"
 
 # -- literals
 STR_DBCOLUMN = "\t Name    : {0}\n\t Contents: {1}\n\t Type    : {2}\n\t Action  : {3}"
-DUPLICATED_ROW = "Duplicated row: {0}"
 
 # classes
 # -----------------------------------------------------------------------------
@@ -479,6 +483,43 @@ class DBColumn:
 
 
 # -----------------------------------------------------------------------------
+# DBModifier
+#
+# Provides the definition of a block modifier
+# -----------------------------------------------------------------------------
+class DBModifier:
+    """
+    Provides the definition of a block modifier
+    """
+
+    def __init__(self, name, *args):
+        """Modifiers are distinguished with a name and qualified with a number of
+           arguments"""
+
+        # copy the attributes
+        self._name, self._args = name, args
+
+
+    def __eq__(self, other):
+        """returns whether this modifier has the name given in other"""
+
+        return self._name == other
+
+
+    def get_name(self):
+        """return the name of this instance"""
+
+        return self._name
+
+
+    def get_args(self):
+        """return the arguments of this instance"""
+
+        return self._args
+
+
+
+# -----------------------------------------------------------------------------
 # DBBlock
 #
 # Provides the definition of a table block. A block consists of a definition of
@@ -490,10 +531,10 @@ class DBBlock:
     different columns
     """
 
-    def __init__(self, columns, modifiers=None):
+    def __init__(self, columns, modifiers=[]):
         '''initializes a block as a sequence of columns. Columns shall be given as a
            list of instances of DBColumn. Modifiers affect the behaviour of the
-           table.
+           table and should be given as a list of instances of DBModifier
 
            Valid modifiers are the following:
 
@@ -501,6 +542,18 @@ class DBBlock:
 
               * check_duplicates: verifies that all rows are diff. If not, a
                 warning is shown but still all rows are inserted into the table
+
+              * geq <NUMBER>: verifies that the number of rows generated is at
+                least the given NUMBER
+
+              * leq <NUMBER>: verifies that the number of rows generated is less
+                or equal than the given NUMBER
+
+              * eq <NUMBER>: verifies that the number of rows generated is
+                strictly equal to the given NUMBER
+
+              * neq <NUMBER>: verifies that the number of rows generated is
+                strictly different than the given NUMBER
 
         '''
 
@@ -571,7 +624,10 @@ class DBBlock:
 
         # in preparation to create rows (by aligning the data of all columns),
         # create a default dict that registers the number of occurrences of each
-        # row. This dictionary is then used by modifiers unique/check_duplicates
+        # row. This dictionary is then used by modifiers
+        # unique/check_duplicates. Also count the number of rows finally
+        # generated
+        nbrows = 0
         unique = defaultdict(int)
 
         # all columns are now the same length. Create a list of tuples, where
@@ -596,11 +652,35 @@ class DBBlock:
 
                     # if check-duplicates was requested
                     if 'check_duplicates' in self._modifiers:
-                        print(DUPLICATED_ROW.format(row))
+                        print(WARNING_DUPLICATED_ROW.format(row))
                     if 'unique' in self._modifiers:
                         continue
 
-                data.append(row)                       # and add this tuple
+                # add this tuple and increment the number of accepted rows
+                nbrows += 1
+                data.append(row)
+
+        # apply now modifiers related to the number of tuples to be generated
+        for imodifier in self._modifiers:
+            if imodifier == 'geq':
+                arg = imodifier.get_args()[0]
+                if arg > nbrows:
+                    print(WARNING_LESS.format(nbrows, arg))
+
+            if imodifier == 'leq':
+                arg = imodifier.get_args()[0]
+                if arg < nbrows:
+                    print(WARNING_GREATER.format(nbrows, arg))
+
+            if imodifier == 'eq':
+                arg = imodifier.get_args()[0]
+                if arg != nbrows:
+                    print(WARNING_NOT_EQUAL.format(nbrows, arg))
+
+            if imodifier == 'neq':
+                arg = imodifier.get_args()[0]
+                if arg == nbrows:
+                    print(WARNING_EQUAL.format(nbrows, arg))
 
         # and return all data retrieved from the spreadsheet in the form of a
         # list of tuples, ready to be inserted into the database

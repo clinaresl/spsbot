@@ -63,7 +63,11 @@ class DBParser:
         'Warning'   : 'WARNING',
         'Error'     : 'ERROR',
         'unique'    : 'UNIQUE',
-        'check_duplicates' : 'CHECK_DUPLICATES'
+        'check_duplicates' : 'CHECK_DUPLICATES',
+        'geq'       : 'GEQ',
+        'leq'       : 'LEQ',
+        'eq'        : 'EQ',
+        'neq'       : 'NEQ'
         }
 
     # List of token names. This is always required
@@ -266,9 +270,16 @@ class DBParser:
     # the acknowledged modifiers are shown next
     def p_modifier(self, p):
         '''modifier : UNIQUE SEMICOLON
-                    | CHECK_DUPLICATES SEMICOLON'''
+                    | CHECK_DUPLICATES SEMICOLON
+                    | GEQ NUMBER SEMICOLON
+                    | LEQ NUMBER SEMICOLON
+                    | EQ NUMBER SEMICOLON
+                    | NEQ NUMBER SEMICOLON'''
 
-        p[0] = p[1]
+        if len(p) == 2:
+            p[0] = dbstructs.DBModifier(p[1])
+        else:
+            p[0] = dbstructs.DBModifier(p[1], p[2])
 
     def p_columns(self, p):
         '''columns : column
