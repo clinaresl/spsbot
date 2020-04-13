@@ -65,7 +65,7 @@ WARNING_LESS = " Warning - {0} < {1} rows generated"
 WARNING_GREATER = " Warning - {0} > {1} rows generated"
 
 # -- literals
-STR_DBCOLUMN = "\t Name    : {0}\n\t Contents: {1}\n\t Type    : {2}\n\t Action  : {3}"
+STR_DBCOLUMN = "\t Name    : {0}{1}\n\t Contents: {2}\n\t Type    : {3}\n\t Action  : {4}"
 
 # classes
 # -----------------------------------------------------------------------------
@@ -284,7 +284,7 @@ class DBColumn:
     Provides a definition of columns as they are stored in the database
     """
 
-    def __init__(self, name, contents, ctype, action):
+    def __init__(self, name, contents, ctype, action, key):
         '''defines a column with the given name which should be populated with the
            specified contents. Contents can be either ranges of cells whose
            value has to be retrieved from the database or data explicitly given
@@ -292,10 +292,13 @@ class DBColumn:
            All data read should be automatically casted into the given ctype. In
            case a cell contains no data, the specified action should be raised
 
+           If this column is a key then key takes the value True
+
         '''
 
         # copy the attributes given to the constructor
-        self._name, self._contents, self._type, self._action = (name, contents, ctype, action)
+        (self._name, self._contents, self._type, self._action, self._key) = \
+            (name, contents, ctype, action, key)
 
         # and also intialize the container which should store the data retrieved
         # from the spreadsheet
@@ -310,7 +313,8 @@ class DBColumn:
     def __str__(self):
         '''provides a human-readable description of the contents of this column'''
 
-        return STR_DBCOLUMN.format(self._name, self._contents, self._type, self._action)
+        return STR_DBCOLUMN.format(self._name, '(*)' if self._key else '',
+                                   self._contents, self._type, self._action)
 
     def get_name(self):
         '''returns the name of this column'''
@@ -331,6 +335,11 @@ class DBColumn:
         '''returns the action of this column'''
 
         return self._action
+
+    def get_key(self):
+        '''returns whether this column is a key or not'''
+
+        return self._key
 
     def get_data(self):
         '''return the data in this column'''
@@ -506,6 +515,17 @@ class DBModifier:
         return self._name == other
 
 
+    def __str__(self):
+        """provides a human-readable description of the contents of this instance"""
+
+        output = "{0}".format(self._name)
+        if self._args:
+            output += ' ('
+            for iarg in self._args[:-1]:
+                output += "{0}, ".format(iarg)
+            output += "{0})".format(self._args[-1])
+        return output
+
     def get_name(self):
         """return the name of this instance"""
 
@@ -516,7 +536,6 @@ class DBModifier:
         """return the arguments of this instance"""
 
         return self._args
-
 
 
 # -----------------------------------------------------------------------------
@@ -560,15 +579,31 @@ class DBBlock:
         # copy the attributes
         self._columns, self._modifiers = columns, modifiers
 
+        # process all columns to get a list of all primary keys
+        self._keys = list()
+        for icolumn in self._columns:
+            if icolumn.get_key():
+                self._keys.append(icolumn)
+
     def get_columns(self):
         """return the columns of this block"""
 
         return self._columns
 
+    def get_keys(self):
+        """return the primary keys of this block"""
+
+        return self._keys
+
     def get_modifiers(self):
         """return the modifiers of this block"""
 
         return self._modifiers
+
+    def get_nbkeys(self):
+        """return the number of primary keys of this block"""
+
+        return len(self._keys)
 
     def __eq__(self, other):
         '''one block is equal to another if and only if they have the same columns
@@ -590,7 +625,7 @@ class DBBlock:
         if self._modifiers:
             output += "\t Modifiers: \n"
             for imodifier in self._modifiers:
-                output += "\t * {0}\n".format(imodifier)
+                output += "\t\t {0}\n".format(imodifier)
             output += "\n"
 
         for column in self._columns:
@@ -768,10 +803,10 @@ class DBTable:
         '''provides a human-readable description of the contents of this database'''
 
         output = str()                         # initialize the output string
-        output += " Name       : {0}\n".format(self._name)
+        output += " Block      : {0}\n".format(self._name)
         output += " Spreadsheet: {0}\n".format(self.get_spreadsheet())
-        output += " Sheet name : {0}\n".format(self.get_sheetname())
-        output += " Block      : \n{0}\n\n".format(self._block)
+        output += " Sheet name : {0}\n\n".format(self.get_sheetname())
+        output += " {0}\n\n".format(self._block)
 
         return output                           # return the output string
 
@@ -833,6 +868,7 @@ class DBTable:
 
         else:
 
+            # recreate the SQL statement that creates this table
             cmdline = 'CREATE TABLE ' + self._name + ' ('
             for column in self._block.get_columns()[:-1]:        # for all columns but the last one
                 cmdline += column.get_name() + ' '               # compose the name of the column
@@ -840,7 +876,23 @@ class DBTable:
 
             # do the same with the last one but with a closing parenthesis instead
             cmdline += self._block.get_columns()[-1].get_name() + ' '
-            cmdline += self._block.get_columns()[-1].get_type() + ')'
+            cmdline += self._block.get_columns()[-1].get_type()
+
+            # verify whether this table has keys or not
+            if self._block.get_nbkeys() > 0:
+
+                # add the first primary key as there is surely one at least
+                cmdline += ', PRIMARY KEY (' + self._block.get_keys()[0].get_name()
+
+                # and add others in case there are more
+                for ikey in self._block.get_keys()[1:]:
+                    cmdline += ', ' + ikey.get_name()
+
+                # and close the opening parenthesis listing the primary keys
+                cmdline += ')'
+
+            # end the SQL statement
+            cmdline += ");"
 
             # and now, create the table
             cursor.execute(cmdline)
