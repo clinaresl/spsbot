@@ -356,15 +356,18 @@ class DBParser:
         '''qualifiers : qualifier
                       | qualifier qualifiers'''
 
+        # this grammar rule returns a list with all qualifiers parsed for a
+        # given column
         if len(p) == 2:
             p[0] = [p[1]]
         if len(p) == 3:
             p[0] = [p[1]] + p[2]
 
-    # legal qualifiers refer to the creation of either indexes or keys
+    # legal qualifiers are listed below
     def p_qualifier(self, p):
         '''qualifier : INDEX
-                     | KEY'''
+                     | KEY
+                     | UNIQUE'''
 
         p[0] = p[1]
 

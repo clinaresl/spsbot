@@ -297,6 +297,7 @@ class DBColumn:
 
            INDEX - This column is an index
            KEY - This column is part of a PRIMARY KEY
+           UNIQUE - This column is unique across insertions/updates
 
         '''
 
@@ -349,6 +350,11 @@ class DBColumn:
         '''returns whether this column is a key or not'''
 
         return "key" in self._qualifiers
+
+    def is_unique(self):
+        '''returns whether this column is subjected to a UNIQUE constraint'''
+
+        return "unique" in self._qualifiers
 
     def get_data(self):
         '''return the data in this column'''
@@ -583,6 +589,15 @@ class DBBlock:
               * neq <NUMBER>: verifies that the number of rows generated is
                 strictly different than the given NUMBER
 
+           In addition, a number of different qualiiers can be given on
+           individual columns on any combination:
+
+              * KEY: declares a column (or more) to be a KEY
+
+              * INDEX: defines an index on a column (or more)
+
+              * UNIQUE: sets up a SQL constraint UNIQUE on one column (or more)
+
         '''
 
         # copy the attributes
@@ -599,6 +614,14 @@ class DBBlock:
         for icolumn in self._columns:
             if icolumn.is_index():
                 self._indexes.append(icolumn)
+
+        # also, process all columns to get a list of all that are subjected to a
+        # UNIQUE constraint
+        self._uniques = []
+        for icolumn in self._columns:
+            if icolumn.is_unique():
+                self._uniques.append(icolumn)
+
 
     def get_columns(self):
         """return the columns of this block"""
@@ -620,10 +643,20 @@ class DBBlock:
 
         return self._modifiers
 
+    def get_uniques(self):
+        """return all columns in this block subjected to the SQL UNIQUE constraint"""
+
+        return self._uniques
+
     def get_nbkeys(self):
         """return the number of primary keys of this block"""
 
         return len(self._keys)
+
+    def get_nbuniques(self):
+        """return the number of SQL UNIQUE constraints defined in this block"""
+
+        return len(self._uniques)
 
     def __eq__(self, other):
         '''one block is equal to another if and only if they have the same columns
@@ -911,6 +944,21 @@ class DBTable:
                     cmdline += ', ' + ikey.get_name()
 
                 # and close the opening parenthesis listing the primary keys
+                cmdline += ')'
+
+            # now, in case this table have any UNIQUE constraints defined, add
+            # them after the columns
+            if self._block.get_nbuniques() > 0:
+
+                # add the SQL UNIQUE constraint along with the first column
+                cmdline += ', UNIQUE (' + self._block.get_uniques()[0].get_name()
+
+                # and add others in case there are more
+                for iunique in self._block.get_uniques()[1:]:
+                    cmdline += ', ' + iunique.get_name()
+
+                # and close the opening parenthesis listing all UNIQUE
+                # constraints
                 cmdline += ')'
 
             # end the SQL statement
