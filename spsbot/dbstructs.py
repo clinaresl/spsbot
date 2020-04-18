@@ -284,7 +284,7 @@ class DBColumn:
     Provides a definition of columns as they are stored in the database
     """
 
-    def __init__(self, name, contents, ctype, action, key):
+    def __init__(self, name, contents, ctype, action, *qualifiers):
         '''defines a column with the given name which should be populated with the
            specified contents. Contents can be either ranges of cells whose
            value has to be retrieved from the database or data explicitly given
@@ -292,13 +292,17 @@ class DBColumn:
            All data read should be automatically casted into the given ctype. In
            case a cell contains no data, the specified action should be raised
 
-           If this column is a key then key takes the value True
+           Additionally, any qualifiers can be given in the last parameter.
+           Values accepted are listed below:
+
+           INDEX - This column is an index
+           KEY - This column is part of a PRIMARY KEY
 
         '''
 
         # copy the attributes given to the constructor
-        (self._name, self._contents, self._type, self._action, self._key) = \
-            (name, contents, ctype, action, key)
+        (self._name, self._contents, self._type, self._action, self._qualifiers) = \
+            (name, contents, ctype, action, qualifiers)
 
         # and also intialize the container which should store the data retrieved
         # from the spreadsheet
@@ -313,7 +317,7 @@ class DBColumn:
     def __str__(self):
         '''provides a human-readable description of the contents of this column'''
 
-        return STR_DBCOLUMN.format(self._name, '(*)' if self._key else '',
+        return STR_DBCOLUMN.format(self._name, '(*)' if self.is_key() else '',
                                    self._contents, self._type, self._action)
 
     def get_name(self):
@@ -336,10 +340,15 @@ class DBColumn:
 
         return self._action
 
-    def get_key(self):
+    def is_index(self):
+        '''returns whether this column is an index or not'''
+
+        return "index" in self._qualifiers
+
+    def is_key(self):
         '''returns whether this column is a key or not'''
 
-        return self._key
+        return "key" in self._qualifiers
 
     def get_data(self):
         '''return the data in this column'''
@@ -580,15 +589,26 @@ class DBBlock:
         self._columns, self._modifiers = columns, modifiers
 
         # process all columns to get a list of all primary keys
-        self._keys = list()
+        self._keys = []
         for icolumn in self._columns:
-            if icolumn.get_key():
+            if icolumn.is_key():
                 self._keys.append(icolumn)
+
+        # in addition, process all columns to get a list of all indexes
+        self._indexes = []
+        for icolumn in self._columns:
+            if icolumn.is_index():
+                self._indexes.append(icolumn)
 
     def get_columns(self):
         """return the columns of this block"""
 
         return self._columns
+
+    def get_indexes(self):
+        """return the indexes of this block"""
+
+        return self._indexes
 
     def get_keys(self):
         """return the primary keys of this block"""
@@ -868,6 +888,8 @@ class DBTable:
 
         else:
 
+            # -- table creation
+
             # recreate the SQL statement that creates this table
             cmdline = 'CREATE TABLE ' + self._name + ' ('
             for column in self._block.get_columns()[:-1]:        # for all columns but the last one
@@ -896,6 +918,29 @@ class DBTable:
 
             # and now, create the table
             cursor.execute(cmdline)
+
+            # -- index creation
+
+            # only in case this table contains any indexes
+            if self._block.get_indexes():
+
+                # initialize the cmdline
+                cmdline = "CREATE INDEX {} ON {} (".format(self._name + "_index", self._name)
+
+                # add the first column, note that at least one is guaranteed to
+                # exist
+                cmdline += self._block.get_indexes()[0].get_name()
+
+                # and now add others if more than one was given
+                for iindex in self._block.get_indexes()[1:]:
+                    cmdline += ", {}".format(iindex.get_name())
+
+                # and end the list of indexes
+                cmdline += ');'
+
+                # and now, add the key
+                cursor.execute(cmdline)
+
 
     def insert(self, cursor, spsname, sheetname=None, override=False):
         '''insert the data of this table in a sqlite3 database through the given sqlite3

@@ -68,6 +68,7 @@ class DBParser:
         'leq'       : 'LEQ',
         'eq'        : 'EQ',
         'neq'       : 'NEQ',
+        'index'     : 'INDEX',
         'key'       : 'KEY'
         }
 
@@ -294,57 +295,78 @@ class DBParser:
     # columns consists of an ID for the column in the database, the contents to
     # write, and optionally a type of the column and/or an action to execute in
     # case the content specified is not available. Optionally, each column can
-    # be preceded with the symbol as a key
+    # be preceded by a number of qualifiers
     def p_column(self, p):
         '''column : ID contentlist SEMICOLON
-                  | KEY ID contentlist SEMICOLON
                   | ID contentlist type SEMICOLON
-                  | KEY ID contentlist type SEMICOLON
                   | ID contentlist action SEMICOLON
-                  | KEY ID contentlist action SEMICOLON
                   | ID contentlist type action SEMICOLON
-                  | KEY ID contentlist type action SEMICOLON'''
+                  | qualifiers ID contentlist SEMICOLON
+                  | qualifiers ID contentlist type SEMICOLON
+                  | qualifiers ID contentlist action SEMICOLON
+                  | qualifiers ID contentlist type action SEMICOLON'''
 
-        if len(p) == 4:
-            p[0] = dbstructs.DBColumn(p[1], p[2], None, None, False)
-        if len(p) == 5:
+        # if this is a non-qualified column (i.e., comes with no qualifiers)
+        if not isinstance(p[1], list):
 
-            # if this column is a key
-            if p[1] == '*':
+            # if this column consists only of the list of contents
+            if len(p) == 4:
+                p[0] = dbstructs.DBColumn(p[1], p[2], None, dbstructs.DBAction('None'))
 
-                # then this case is like the first one, but with key being True
-                p[0] = dbstructs.DBColumn(p[2], p[3], None, None, True)
-
-            else:
+            # if this column consists of the list of contents and either the type of
+            # the column or an action to execute in case data is not available
+            if len(p) == 5:
 
                 # if the type was given but not an action
                 if p[3] in ["integer", "real", "text", "datetime", "date"]:
-                    p[0] = dbstructs.DBColumn(p[1], p[2], p[3], dbstructs.DBAction('None'), False)
+                    p[0] = dbstructs.DBColumn(p[1], p[2], p[3], dbstructs.DBAction('None'))
 
                 # otherwise, if an action is given (but not its type)
                 else:
-                    p[0] = dbstructs.DBColumn(p[1], p[2], None, p[3], False)
-        if len(p) == 6:
+                    p[0] = dbstructs.DBColumn(p[1], p[2], None, p[3])
 
-            # if this column is a key
-            if p[1] == '*':
+            # if this column has been fully qualified
+            if len(p) == 6:
+                p[0] = dbstructs.DBColumn(p[1], p[2], p[3], p[4])
 
-                # then verify the same case than before but this time making key
-                # True
+        else:
+
+            # if this column consists only of the list of contents
+            if len(p) == 5:
+                p[0] = dbstructs.DBColumn(p[2], p[3], None, dbstructs.DBAction('None'), *p[1])
+
+            # if this column consists of the list of contents and either the type of
+            # the column or an action to execute in case data is not available
+            if len(p) == 6:
+
+                # if the type was given but not an action
                 if p[4] in ["integer", "real", "text", "datetime", "date"]:
-                    p[0] = dbstructs.DBColumn(p[2], p[3], p[4], dbstructs.DBAction('None'), True)
+                    p[0] = dbstructs.DBColumn(p[2], p[3], p[4], dbstructs.DBAction('None'), *p[1])
 
                 # otherwise, if an action is given (but not its type)
                 else:
-                    p[0] = dbstructs.DBColumn(p[2], p[3], None, p[4], True)
+                    p[0] = dbstructs.DBColumn(p[2], p[3], None, p[4], *p[1])
 
-            # otherwise, this is a fully qualified column which is not key
-            else:
-                p[0] = dbstructs.DBColumn(p[1], p[2], p[3], p[4], False)
+            # if this column has been fully qualified
+            if len(p) == 7:
+                p[0] = dbstructs.DBColumn(p[2], p[3], p[4], p[5], *p[1])
 
-        # if this column has been fully qualified
-        if len(p) == 7:
-            p[0] = dbstructs.DBColumn(p[2], p[3], p[4], p[5], True)
+    # qualifiers can be given in any order as a blank-separated list of keywords
+    def p_qualifiers(self, p):
+        '''qualifiers : qualifier
+                      | qualifier qualifiers'''
+
+        if len(p) == 2:
+            p[0] = [p[1]]
+        if len(p) == 3:
+            p[0] = [p[1]] + p[2]
+
+    # legal qualifiers refer to the creation of either indexes or keys
+    def p_qualifier(self, p):
+        '''qualifier : INDEX
+                     | KEY'''
+
+        p[0] = p[1]
 
     # when specifying the contents of a database, it is possible to give an
     # arbitrary number of them as specified in contentlist
