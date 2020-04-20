@@ -55,7 +55,7 @@ class ShowSpsSpec(argparse.Action):
         pragma.subst_templates()
 
         # parse the contents of the configuration file after preprocessing it
-        session = spsparser.FileSPSParser()
+        session = spsparser.VerbatimSPSParser()
         book = session.run(pragma.get_text())
 
         # otherwise, process the file through the main entry point provided in
