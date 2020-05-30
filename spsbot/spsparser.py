@@ -13,8 +13,9 @@
 # Login   <carlos.linares@uc3m.es>
 #
 
-"""
-A parser for the sps language used to specify the contents of spreadsheets
+"""A parser for the sps language used to specify the contents of spreadsheets
+from information in a database
+
 """
 
 # imports

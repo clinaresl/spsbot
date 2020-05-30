@@ -12,8 +12,9 @@
 # Login   <carlos.linares@uc3m.es>
 #
 
-"""
-A parser for the db language used to specify database tables
+"""A parser for the db language used to specify the content and schema of
+database tables from the information in a spreadsheet
+
 """
 
 # imports

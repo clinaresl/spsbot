@@ -843,7 +843,7 @@ class SPSCellReference:
 
         """
 
-        # is the descript a cell given explicitly? If so, use it directly,
+        # is the descriptor a cell given explicitly? If so, use it directly,
         # otherwise, retrieve it from the context
         if re.match(r'[a-zA-Z]+\d+', self._descriptor):
             self._cell = self._descriptor

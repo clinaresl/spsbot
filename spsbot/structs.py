@@ -27,8 +27,8 @@ import re                               # match
 # -----------------------------------------------------------------------------
 
 # -- errors
-ERROR_ROWS_OUT_OF_RANGE = "add_rows ({0}, {1}) goes above the first row"
-ERROR_COLUMNS_OUT_OF_RANGE = "add_columns ({0}, {1}) goes beyond the left margin"
+ERROR_ROWS_OUT_OF_RANGE = "add_rows({0}, {1}) goes above the first row"
+ERROR_COLUMNS_OUT_OF_RANGE = "add_columns({0}, {1}) goes beyond the left margin"
 
 
 # functions
@@ -39,14 +39,14 @@ ERROR_COLUMNS_OUT_OF_RANGE = "add_columns ({0}, {1}) goes beyond the left margin
 #
 # return a tuple (column, row) represented with a string and an integer
 # -----------------------------------------------------------------------------
-def get_columnrow (cellname):
+def get_columnrow(cellname):
     '''return a tuple (column, row) represented with a string and an integer'''
 
     # extract the column and the row from the given cell name
-    m = re.match (r'(?P<column>[a-zA-Z]+)(?P<row>\d+)', cellname)
+    match = re.match(r'(?P<column>[a-zA-Z]+)(?P<row>\d+)', cellname)
 
     # and make sure to cast the row to an integer
-    return (m.groups ()[0], int (m.groups () [1]))
+    return(match.groups()[0], int(match.groups()[1]))
 
 
 # -----------------------------------------------------------------------------
@@ -56,7 +56,7 @@ def get_columnrow (cellname):
 # represented as a string. For this, characters are translate into
 # numbers and the whole sequence is interpreted as a number in base 26
 # -----------------------------------------------------------------------------
-def get_columnindex (columnname):
+def get_columnindex(columnname):
     '''return a unique integer identifier for the given column which is
        represented as a string. For this, characters are translated
        into numbers and the whole sequence is interpreted as a number
@@ -68,16 +68,16 @@ def get_columnindex (columnname):
     # just by substracting the ordinal of character 'A' and adding 1
     # to avoid zeroes. For this, make sure that the given column is
     # interpreted as an upper case letter.
-    intcol = [1 + ord (x.upper ()) - ord ('A') for x in columnname]
+    intcol = [1 + ord(x.upper()) - ord('A') for x in columnname]
 
     # Next, process this number in base 26 (which is the value of 1 +
-    # ord ('Z') - ord ('A'))
+    # ord('Z') - ord('A'))
     result = 0
-    for index, icolumn in enumerate (intcol):
-        result += icolumn * math.pow (1 + ord ('Z') - ord ('A'), len (intcol) - index - 1)
+    for index, icolumn in enumerate(intcol):
+        result += icolumn * math.pow(1 + ord('Z') - ord('A'), len(intcol) - index - 1)
 
     # and return the result, base zero
-    return int (result) - 1
+    return int(result) - 1
 
 
 # -----------------------------------------------------------------------------
@@ -88,7 +88,7 @@ def get_columnindex (columnname):
 # that it belongs to a region which contains precisely nbrows and
 # whose first row is index startrow
 # -----------------------------------------------------------------------------
-def get_index (cellname, startrow, nbrows):
+def get_index(cellname, startrow, nbrows):
 
     '''return a unique integer identifier for the given cell (represented
        with a column which is a string and a row which is a number)
@@ -97,12 +97,12 @@ def get_index (cellname, startrow, nbrows):
 
     '''
 
-    # first, extract the column and row from the cellname 
-    column, row = get_columnrow (cellname)
-    
+    # first, extract the column and row from the cellname
+    column, row = get_columnrow(cellname)
+
     # apply the typical formula - note that this index starts
     # assigning values from column 'A'
-    return get_columnindex (column) * nbrows + (row - startrow)
+    return get_columnindex(column) * nbrows +(row - startrow)
 
 
 # -----------------------------------------------------------------------------
@@ -110,7 +110,7 @@ def get_index (cellname, startrow, nbrows):
 #
 # returns the string representing the column whose index is the given one
 # -----------------------------------------------------------------------------
-def get_columnname (columnindex):
+def get_columnname(columnindex):
     '''returns the string representing the column whose index is the given
        one
 
@@ -120,23 +120,23 @@ def get_columnname (columnindex):
     pos = 0                                     # compute digits upwards
     result = str()                              # starting with the empty str
 
-    base = 1 + ord ('Z') - ord ('A')            # yeah, 26 ... obviously?
+    base = 1 + ord('Z') - ord('A')            # yeah, 26 ... obviously?
     while True:
 
         # compute this digit as the remainder with the base of the next position
-        digit = int ( ( columnindex % int (math.pow (base, 1 + pos)) ) / math.pow (base, pos) )
+        digit = int((columnindex % int(math.pow(base, 1 + pos))) / math.pow(base, pos))
 
         # there is a caveat here. If the value is promoted to an upper
         # position, it can not be zero in general, of course. However,
         # in lexicographic order, the upper value can be 'A' (which is
         # the equivalent of zero)
         if not pos:
-            result = chr ( ord ('A') + digit) + result
+            result = chr(ord('A') + digit) + result
         else:
-            result = chr ( ord ('A') + digit - 1) + result
+            result = chr(ord('A') + digit - 1) + result
 
         # substract the amount we just computed
-        columnindex -= digit * int (math.pow (base, pos))
+        columnindex -= digit * int(math.pow(base, pos))
 
         # and go to the next upper location
         pos += 1
@@ -147,7 +147,7 @@ def get_columnname (columnindex):
 
     # and return the result
     return result
-    
+
 
 # -----------------------------------------------------------------------------
 # get_cellname
@@ -156,7 +156,7 @@ def get_columnname (columnindex):
 # (row) whose index is the given one provided that it belongs to a
 # region with nbrows in total which starts at startrow
 # -----------------------------------------------------------------------------
-def get_cellname (index, startrow, nbrows):
+def get_cellname(index, startrow, nbrows):
     '''return a cell represented with a string (column) and an integer
        (row) whose index is the given one provided that it belongs to
        a region with nbrows in total which starts at startrow
@@ -164,9 +164,9 @@ def get_cellname (index, startrow, nbrows):
     '''
 
     # apply here the typical formula
-    return get_columnname (int (index / nbrows)) + str (startrow + (index % nbrows))
+    return get_columnname(int(index / nbrows)) + str(startrow +(index % nbrows))
 
-    
+
 # -----------------------------------------------------------------------------
 # add_rows
 #
@@ -174,24 +174,24 @@ def get_cellname (index, startrow, nbrows):
 # it. If value is positive, it returns a cell below; otherwise, it
 # returns a cell above
 # -----------------------------------------------------------------------------
-def add_rows (cellname, value):
+def add_rows(cellname, value):
     '''returns a new cell which is the given number of rows away from
        it. If value is positive, it returns a cell below; otherwise,
        it returns a cell above
 
     '''
-    
+
     # get the current column and row of the specified cell
-    (column, row) = get_columnrow (cellname)
+    (column, row) = get_columnrow(cellname)
 
     # verify you are not below the first row
     if row + value < 1:
-        raise ValueError (ERROR_ROWS_OUT_OF_RANGE.format (cellname, value))
-    
+        raise ValueError(ERROR_ROWS_OUT_OF_RANGE.format(cellname, value))
+
     # return the name of a cell which is a given number of rows below
     # the current one
-    return column + str (row + value)
-    
+    return column + str(row + value)
+
 # -----------------------------------------------------------------------------
 # add_columns
 #
@@ -199,7 +199,7 @@ def add_rows (cellname, value):
 # it. If value is positive, it returns a cell to its right; otherwise,
 # it returns a cell to the left
 # -----------------------------------------------------------------------------
-def add_columns (cellname, value):
+def add_columns(cellname, value):
     '''returns a new cell which is the given number of columns away from
        it. If value is positive, it returns a cell to its right;
        otherwise, it returns a cell to the left
@@ -207,15 +207,15 @@ def add_columns (cellname, value):
     '''
 
     # get the current column and row of the specified cell
-    (column, row) = get_columnrow (cellname)
+    (column, row) = get_columnrow(cellname)
 
     # verify you are not below the first column
-    if get_columnindex (column) + value < 0:
-        raise ValueError (ERROR_COLUMNS_OUT_OF_RANGE.format (cellname, value))
-    
+    if get_columnindex(column) + value < 0:
+        raise ValueError(ERROR_COLUMNS_OUT_OF_RANGE.format(cellname, value))
+
     # return the name of a cell which is a given number of columns below
     # the current one
-    return get_columnname (get_columnindex (column) + value) + str (row)
+    return get_columnname(get_columnindex(column) + value) + str(row)
 
 # -----------------------------------------------------------------------------
 # sub_cells
@@ -223,7 +223,7 @@ def add_columns (cellname, value):
 # returns a tuple with the difference in columns and rows between cellname1 and
 # cellname2 so that if the difference is added to cellname1, cellname2 results
 # -----------------------------------------------------------------------------
-def sub_cells (cellname1, cellname2):
+def sub_cells(cellname1, cellname2):
     '''returns a tuple with the difference in columns and rows between cellname1 and
        cellname2 so that if the difference is added to cellname1, cellname2
        results
@@ -231,11 +231,11 @@ def sub_cells (cellname1, cellname2):
     '''
 
     # get the column and row of each cellname
-    (column1, row1) = get_columnrow (cellname1)
-    (column2, row2) = get_columnrow (cellname2)
+    (column1, row1) = get_columnrow(cellname1)
+    (column2, row2) = get_columnrow(cellname2)
 
     # and return the difference in columns and rows
-    return (get_columnindex (column2) - get_columnindex (column1), row2 - row1)
+    return(get_columnindex(column2) - get_columnindex(column1), row2 - row1)
 
 # -----------------------------------------------------------------------------
 # Range
@@ -247,7 +247,7 @@ class Range:
     Definition of a single range of cells which provides an iterator
     """
 
-    def __init__ (self, interval):
+    def __init__(self, interval):
 
         '''defines a consecutive range of cells as an interval [start,
            end]. Both the start and end are represented with a string
@@ -260,13 +260,13 @@ class Range:
         '''
 
         # copy the attributes
-        self._start = interval [0]
-        self._end   = interval [1]
+        self._start = interval[0]
+        self._end = interval[1]
 
         # get the starting/ending column/row of the interval with a
         # regular expression that creates groups for each part
-        self._startcolumn, self._startrow = get_columnrow (self._start)
-        self._endcolumn  , self._endrow   = get_columnrow (self._end)
+        self._startcolumn, self._startrow = get_columnrow(self._start)
+        self._endcolumn, self._endrow = get_columnrow(self._end)
 
         # make sure that start is less or equal than end so that all
         # the subsequent operations get much simpler
@@ -281,16 +281,16 @@ class Range:
             # Case 2: start is NE end
             else:
 
-                self._start = self._endcolumn   + str (self._startrow)
-                self._end   = self._startcolumn + str (self._endrow)
-            
+                self._start = self._endcolumn   + str(self._startrow)
+                self._end = self._startcolumn + str(self._endrow)
+
         else:
 
             # Case 3: start is SW end
             if self._startcolumn < self._endcolumn:
 
-                self._start = self._startcolumn + str (self._endrow)
-                self._end   = self._endcolumn   + str (self._startrow)
+                self._start = self._startcolumn + str(self._endrow)
+                self._end = self._endcolumn + str(self._startrow)
 
             # Case 4: start is SE end
             else:
@@ -299,28 +299,28 @@ class Range:
 
         # now, start and end properly represent the upper left corner
         # and the lower right corner of the region
-        self._startcolumn, self._startrow = get_columnrow (self._start)
-        self._endcolumn  , self._endrow   = get_columnrow (self._end)
-        
+        self._startcolumn, self._startrow = get_columnrow(self._start)
+        self._endcolumn, self._endrow = get_columnrow(self._end)
+
         # in preparation for the iterator just locate the first and
         # last cells of this region
-        self._current = get_index (self._start, self._startrow,
-                                   1 + self._endrow - self._startrow)
-        self._enditer = get_index (self._end, self._startrow,
-                                   1 + self._endrow - self._startrow)
-        
+        self._current = get_index(self._start, self._startrow,
+                                  1 + self._endrow - self._startrow)
+        self._enditer = get_index(self._end, self._startrow,
+                                  1 + self._endrow - self._startrow)
 
-    def __str__ (self):
+
+    def __str__(self):
         '''provides a human readable representation of the contents of this intance'''
 
-        return "{0}:{1}".format (self._start, self._end)
-        
-    def __iter__ (self):
+        return "{0}:{1}".format(self._start, self._end)
+
+    def __iter__(self):
         '''defines the simplest case for iterators'''
-        
+
         return self
 
-    def __next__ (self):
+    def __next__(self):
         '''returns the next cell with the format <string><number> where string
            represents the column and number stands for the row
 
@@ -333,76 +333,74 @@ class Range:
             self._current += 1
 
             # and decrement prior to execute the return statement
-            return get_cellname (self._current-1, self._startrow, 1 + self._endrow - self._startrow)
-        else:
-            
-            # restart the iterator for subsequent invocations of it
-            self._current = get_index (self._start, self._startrow,
-                                       1 + self._endrow - self._startrow)
-            self._enditer = get_index (self._end, self._startrow,
-                                       1 + self._endrow - self._startrow)
+            return get_cellname(self._current-1, self._startrow, 1 + self._endrow - self._startrow)
 
-            # and stop the current iteration
-            raise StopIteration ()
+        # restart the iterator for subsequent invocations of it
+        self._current = get_index(self._start, self._startrow,
+                                  1 + self._endrow - self._startrow)
+        self._enditer = get_index(self._end, self._startrow,
+                                  1 + self._endrow - self._startrow)
 
-    def __len__ (self):
+        # and stop the current iteration
+        raise StopIteration()
+
+    def __len__(self):
         '''returns the number of cells in this range'''
 
         return 1 + \
-            get_index (self._end, self._startrow, 1 + self._endrow - self._startrow) - \
-            get_index (self._start, self._startrow, 1 + self._endrow - self._startrow)
-        
-    def get_start (self):
+            get_index(self._end, self._startrow, 1 + self._endrow - self._startrow) - \
+            get_index(self._start, self._startrow, 1 + self._endrow - self._startrow)
+
+    def get_start(self):
         '''returns the start of the interval'''
 
         return self._start
 
-    def get_end (self):
+    def get_end(self):
         '''returns the end of the interval'''
 
         return self._end
 
-    def add_rows (self, value):
+    def add_rows(self, value):
         '''returns a new range which is the given number of rows away from
            it. If value is positive, it returns a cell below;
            otherwise, it returns a cell above
 
         '''
 
-        return Range ([add_rows (self._start, value), add_rows (self._end, value)])
+        return Range([add_rows(self._start, value), add_rows(self._end, value)])
 
-    def add_columns (self, value):
+    def add_columns(self, value):
         '''returns a new range which is the given number of columns away from
            it. If value is positive, it returns a cell to its right;
            otherwise, it returns a cell to the left
 
         '''
 
-        return Range ([add_columns (self._start, value), add_columns (self._end, value)])
+        return Range([add_columns(self._start, value), add_columns(self._end, value)])
 
-    def number_of_rows (self):
+    def number_of_rows(self):
         '''return the number of rows in this range'''
 
         # get the row of the top left corner of this range, and also
         # the and row of the bottom right corner
-        rowstart = get_columnrow (self._start)[1]
-        rowend = get_columnrow (self._end)[1]
+        rowstart = get_columnrow(self._start)[1]
+        rowend = get_columnrow(self._end)[1]
 
         # and return the number of rows
         return 1 + rowend - rowstart
 
-    def number_of_columns (self):
+    def number_of_columns(self):
         '''return the number of columns in this range'''
 
         # get the column of the top left corner of this range, and
         # also the column of the bottom right corner
-        columnstart = get_columnrow (self._start)[0]
-        columnend = get_columnrow (self._end)[0]
+        columnstart = get_columnrow(self._start)[0]
+        columnend = get_columnrow(self._end)[0]
 
         # and return the number of columns
-        return 1 + get_columnindex (columnend) - get_columnindex (columnstart)
+        return 1 + get_columnindex(columnend) - get_columnindex(columnstart)
 
-        
 
 # Local Variables:
 # mode:python
