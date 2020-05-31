@@ -27,6 +27,7 @@ import re                               # match
 # -----------------------------------------------------------------------------
 
 # -- errors
+ERROR_INVALID_COLUMN_ROW = "the cell '{0}' is not a legal representation of a cell"
 ERROR_ROWS_OUT_OF_RANGE = "add_rows({0}, {1}) goes above the first row"
 ERROR_COLUMNS_OUT_OF_RANGE = "add_columns({0}, {1}) goes beyond the left margin"
 
@@ -44,6 +45,8 @@ def get_columnrow(cellname):
 
     # extract the column and the row from the given cell name
     match = re.match(r'(?P<column>[a-zA-Z]+)(?P<row>\d+)', cellname)
+    if not match:
+        raise ValueError(ERROR_INVALID_COLUMN_ROW.format(cellname))
 
     # and make sure to cast the row to an integer
     return(match.groups()[0], int(match.groups()[1]))

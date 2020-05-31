@@ -161,9 +161,15 @@ class DBParser:
         t.type = self.reserved_words.get(t.value, 'ID')   # Check for reserved words
         return t
 
-    # Definition of cells as an alpha character and a number
+    # Definition of cells. Cells can be given either explicitly or implicitly.
+    #
+    # If they are given explicitly, then they are of the form <column><row>,
+    # where the column is made of alpha characters and the row is made of digits
+    #
+    # If otherwise, it is given implicitly, then either the row or the column is
+    # characterized by its content between square brackets
     def t_CELL(self, t):
-        r'\$[a-zA-Z]+\d+'
+        r'\$[a-zA-Z]+\d+|\$[a-zA-Z]+\[[^\]]*\]|\$\[[^\]]*\]\d+'
 
         return t
 
@@ -386,21 +392,9 @@ class DBParser:
     # contents are either cells, or regions, or values explicitly given
     def p_content(self, p):
         '''content : explicit
-                   | CELL
-                   | CELL COLON CELL'''
+                   | range'''
 
-        if len(p) == 2:
-
-            # if this was a content given explicitly, then return it immediately
-            if isinstance(p[1], dbstructs.DBExplicit):
-                p[0] = p[1]
-            else:
-
-                # otherwise, it is a cell. Create a range with only this cell
-                # after removing first the heading '$'
-                p[0] = structs.Range([p[1][1:], p[1][1:]])
-        else:
-            p[0] = structs.Range([p[1][1:], p[3][1:]])
+        p[0] = p[1]
 
     # data explicitly given is defined literally, as much as when defining
     # default values. The difference though is that data has to go encapsulated
@@ -409,6 +403,22 @@ class DBParser:
         '''explicit : default'''
 
         p[0] = dbstructs.DBExplicit(p[1])
+
+    # Cells can be given either explicitly (e.g., $B24) or in conditional form,
+    # e.g., $B(100). In case conditional cells are used for describing a range
+    # (i.e., when using the colon), the second cell has to be sorted after the
+    # first one
+    #
+    # Also, a range can be given with either just only one cell (described in
+    # either form), or a couple of cells separated by a colon
+    def p_range(self, p):
+        '''range : CELL
+                 | CELL COLON CELL'''
+
+        if len(p) == 2:
+            p[0] = dbstructs.DBRange(p[1], p[1])
+        else:
+            p[0] = dbstructs.DBRange(p[1], p[3])
 
     # note that the only allowed types are numbers (either integers or
     # floating-point numbers), strings and time specifications

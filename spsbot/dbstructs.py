@@ -24,6 +24,7 @@ parsed from a db file
 from collections import defaultdict
 
 import os                               # access
+import re
 import sqlite3
 import sys                              # exit
 
@@ -36,6 +37,9 @@ from . import structs
 
 # -- errors
 ERROR = " Error - {0}"
+ERROR_INVALID_CELL_SPECIFICATION = "The cell '{0}' is not a legal expression, neither implicit nor explicitly"
+ERROR_INVALID_EXPLICIT_CELL_SPECIFICATION = "The cell '{0}' is not a legal explicit cell"
+ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION = "The cell '{0}' is not a legal implicit cell"
 ERROR_CAST_COLUMN = "It was not possible to cast the default value '{0}' defined for column '{1}' to the type '{2}'"
 ERROR_CAST_DBCOLUMN = "It was not possible to cast the value '{0}' in '{1}::{2}' to the type {3}"
 ERROR_CAST_CELL = "It was not possible to cast the value '{0}' found in cell {1} in '{2}::{3}' to the type {4}"
@@ -196,6 +200,155 @@ class DBExplicit:
         """return the data given in this explicit definition"""
 
         return self._data
+
+
+# -----------------------------------------------------------------------------
+# DBRange
+#
+# Definition of a range of cells
+#
+# Ranges are given as a pair of cells. Cells can be given either explicitly or
+# implicitly:
+#
+#    * Explicitly: cells are identified by their coords, e.g., B24
+#    * Implicitly: cells are identified by their content. Either the row or the
+#      column has to be explicitly given, e.g., $B(100) is the cell in column B
+#      and any row whose content is precisely equal to 100.
+#
+#      If cells given implicitly are used for describing a range, then the cell
+#      in second place has to be after the first one so that a range can be
+#      built
+# -----------------------------------------------------------------------------
+class DBRange:
+    """Definition of a range of cells
+
+    Ranges are given as a pair of cells. Cells can be given either explicitly or
+    implicitly:
+
+       * Explicitly: cells are identified by their coords, e.g., B24
+
+       * Implicitly: cells are identified by their content. Either the row or
+         the column has to be explicitly given, e.g., $B(100) is the cell in
+         column B and any row whose content is precisely equal to 100.
+
+         If cells given implicitly are used for describing a range, then the
+         cell in second place has to be after the first one so that a range can
+         be built
+
+    """
+
+    def __init__(self, start, end):
+        '''defines a range of cells which can be given either impliclty or explicilty.
+          'start' and 'end' should be given as strings whose interpretation is
+          implemented in this class
+
+        '''
+
+        # copy the given attributes
+        self._start, self._end = start, end
+
+        # and initialize the instantiated range to none
+        self._range = None
+
+
+    def __str__(self):
+        """Provides a human readable representation of the contents of this instance"""
+
+        if self._range:
+            return "{0}:{1} = {2}".format(self._start, self._end, self._range)
+        return "{0}:{1}".format(self._start, self._end)
+
+
+    def _traverse_cells(self, cell, sheet, base=None):
+        """cell shall be given implicitly, i.e., either <column>[content] or
+           [content]<row> and it returns the specific cell in notation
+           <column><row> whose content matches 'content'.
+
+           If a base is given, it should be also another specific cell given in
+           the format <column><row>. It then returns the cell which takes place
+           after it so that (base, cell) forms a proper range
+
+        """
+
+        # First things first, check whether the cell has been given explicitly
+        # in the form <column><row>
+        if re.match(r'[a-zA-Z]+\d+'):
+
+            # in this case, the given cell is returned immediately in spite of
+            # the base
+            return cell
+
+        # Now, process the cell implicitly. The following regexp returns four
+        # different groups (column0, row0, column1, row1), if the cell has been
+        # given as <column0>[row0] or [column1]<row1>
+        regexp0 = r'(?P<column0>[a-zA-Z]+)\[(?P<row0>[^\]]*)\]'
+        regexp1 = r'\[(?P<column1>[^\]]*)\](?P<row1>\d+)'
+        match = re.match(regexp0 + '|' + regexp1, cell)
+        if not match:
+            raise ValueError(ERROR_INVALID_CELL_SPECIFICATION.format(cell))
+
+        # process the base which should be given explicitly in the form
+        # <column><row> if any was given. These values of column and cell are
+        # the initial values for the column and the cell when looking for the
+        # specific cell matching its contents with those specified in the cell
+        if base:
+            column, row = structs.get_columnrow(base)
+        else:
+            column, row = 'A', 1
+
+        # if the cell was given in the format <colum>[content]
+        if match[0] and match[1]:
+
+            # then the increment between adjacent cells should proceed by rows,
+            # and the content to match is given in
+            delta, content = (0, 1), match[1]
+
+        elif match[2] and match[3]:
+
+            # if otherwise, this cell was given in the format [content]<row>
+            # then the increment should proceed by columns, and the content was
+            # given first
+            delta, content = (1, 0), match[2]
+
+        else:
+
+            # something went deeply wrong here!
+            raise ValueError(ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION.format(cell))
+
+        # so just locate at the given row and column and proceed applying the
+        # given delta until a cell is found with the specified contents. current
+        # is the cell examined at each iteration
+        current = column + str(row)
+        while cell[current] != content:
+
+            # move to the next cell
+            current = structs.add_columns(structs.add_rows(current, delta[1]), delta[0])
+
+        # and return the cell that matches the contents given in the cell beyond
+        # the base, if any was given
+        return current
+
+
+    def get_range(self, sheet):
+        """returns an instantiated range of cells explicitly given, i.e., it computes
+           the specific cells that match the contents given in implicit
+           definitions. For this, it needs the actual contents of the sheet
+           under consideration.
+
+           The start cell of the range is instantiated to the first cell that
+           matches the given contents; the end cell of the range also satisifies
+           that it goes after the start cell, so that a range can be properly
+           built
+
+        """
+
+        # first, process the start of the range
+        start = self._traverse_cells(self._start, sheet)
+        end = self._traverse_cells(self._end, sheet, self._start)
+
+        # and return a range properly formed with these cells
+        self._range = structs.Range(start, end)
+        return self._range
 
 
 # -----------------------------------------------------------------------------
