@@ -415,10 +415,12 @@ class DBParser:
         '''range : CELL
                  | CELL COLON CELL'''
 
+        # note that in the following, dbranges are built after removing the
+        # leading '$'
         if len(p) == 2:
-            p[0] = dbstructs.DBRange(p[1], p[1])
+            p[0] = dbstructs.DBRange(p[1][1:], p[1][1:])
         else:
-            p[0] = dbstructs.DBRange(p[1], p[3])
+            p[0] = dbstructs.DBRange(p[1][1:], p[3][1:])
 
     # note that the only allowed types are numbers (either integers or
     # floating-point numbers), strings and time specifications

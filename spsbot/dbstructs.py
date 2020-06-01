@@ -272,7 +272,7 @@ class DBRange:
 
         # First things first, check whether the cell has been given explicitly
         # in the form <column><row>
-        if re.match(r'[a-zA-Z]+\d+'):
+        if re.match(r'[a-zA-Z]+\d+', cell):
 
             # in this case, the given cell is returned immediately in spite of
             # the base
@@ -297,18 +297,18 @@ class DBRange:
             column, row = 'A', 1
 
         # if the cell was given in the format <colum>[content]
-        if match[0] and match[1]:
+        if match.groups()[0] and match.groups()[1]:
 
             # then the increment between adjacent cells should proceed by rows,
             # and the content to match is given in
-            delta, content = (0, 1), match[1]
+            column, delta, content = match.groups()[0], (0, 1), match.groups()[1]
 
-        elif match[2] and match[3]:
+        elif match.groups()[2] and match.groups()[3]:
 
             # if otherwise, this cell was given in the format [content]<row>
             # then the increment should proceed by columns, and the content was
             # given first
-            delta, content = (1, 0), match[2]
+            row, delta, content = match.groups()[3], (1, 0), match.groups()[2]
 
         else:
 
@@ -319,7 +319,7 @@ class DBRange:
         # given delta until a cell is found with the specified contents. current
         # is the cell examined at each iteration
         current = column + str(row)
-        while cell[current] != content:
+        while sheet[current] != content:
 
             # move to the next cell
             current = structs.add_columns(structs.add_rows(current, delta[1]), delta[0])
@@ -344,10 +344,10 @@ class DBRange:
 
         # first, process the start of the range
         start = self._traverse_cells(self._start, sheet)
-        end = self._traverse_cells(self._end, sheet, self._start)
+        end = self._traverse_cells(self._end, sheet, start)
 
         # and return a range properly formed with these cells
-        self._range = structs.Range(start, end)
+        self._range = structs.Range([start, end])
         return self._range
 
 
@@ -364,8 +364,11 @@ class DBContents:
     """
 
     def __init__(self, intervals):
-        '''defines a list of intervals, each of the form [start, end]. All intervals
-           should be instances of Range
+        '''defines a list of contents, each one can be either a content explicitly
+           given, or a range of cells
+
+           Contents explicitly given should be instances of DBExplicit, whereas
+           ranges should be given as instances of DBRange
 
         '''
 
@@ -588,7 +591,7 @@ class DBColumn:
             # ---------------------------------------------------------------------
             # for all cells in all regions of this column access the specified
             # spreadsheet
-            elif isinstance(content, structs.Range):
+            elif isinstance(content, DBRange):
 
                 # first, gain access to the spreadsheet
                 if not sheetname:
@@ -597,8 +600,8 @@ class DBColumn:
                 else:
                     sheet = pyexcel.get_sheet(file_name=spsname, sheet_name=sheetname)
 
-                # now, for all cells in this range
-                for cell in content:
+                # now, for all cells in the range instantiated of this dbrange
+                for cell in content.get_range(sheet):
 
                     # access the data
                     try:
