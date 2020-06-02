@@ -411,6 +411,9 @@ class DBParser:
     #
     # Also, a range can be given with either just only one cell (described in
     # either form), or a couple of cells separated by a colon
+    #
+    # In any case, cells can be qualified with an offset in the form (<columns>,
+    # <rows>)
     def p_range(self, p):
         '''range : CELL
                  | CELL COLON CELL'''
@@ -418,9 +421,11 @@ class DBParser:
         # note that in the following, dbranges are built after removing the
         # leading '$'
         if len(p) == 2:
-            p[0] = dbstructs.DBRange(p[1][1:], p[1][1:])
+            p[0] = dbstructs.DBRange(dbstructs.DBCellReference(p[1][1:]),
+                                     dbstructs.DBCellReference(p[1][1:]))
         else:
-            p[0] = dbstructs.DBRange(p[1][1:], p[3][1:])
+            p[0] = dbstructs.DBRange(dbstructs.DBCellReference(p[1][1:]),
+                                     dbstructs.DBCellReference(p[3][1:]))
 
     # note that the only allowed types are numbers (either integers or
     # floating-point numbers), strings and time specifications

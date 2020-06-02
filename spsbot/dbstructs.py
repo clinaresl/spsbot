@@ -205,89 +205,113 @@ class DBExplicit:
 
 
 # -----------------------------------------------------------------------------
-# DBRange
+# DBCellReference
 #
-# Definition of a range of cells
-#
-# Ranges are given as a pair of cells. Cells can be given either explicitly or
-# implicitly:
-#
-#    * Explicitly: cells are identified by their coords, e.g., B24
-#    * Implicitly: cells are identified by their content. Either the row or the
-#      column has to be explicitly given, e.g., $B(100) is the cell in column B
-#      and any row whose content is precisely equal to 100.
-#
-#      If cells given implicitly are used for describing a range, then the cell
-#      in second place has to be after the first one so that a range can be
-#      built
+# Definition of a cell given either explicitly or implicitly and an optional
+# offset
 # -----------------------------------------------------------------------------
-class DBRange:
-    """Definition of a range of cells
-
-    Ranges are given as a pair of cells. Cells can be given either explicitly or
-    implicitly:
-
-       * Explicitly: cells are identified by their coords, e.g., B24
-
-       * Implicitly: cells are identified by their content. Either the row or
-         the column has to be explicitly given, e.g., $B(100) is the cell in
-         column B and any row whose content is precisely equal to 100.
-
-         If cells given implicitly are used for describing a range, then the
-         cell in second place has to be after the first one so that a range can
-         be built
+class DBCellReference:
+    """Definition of a cell given either explicitly or implicitly and an optional
+    offset
 
     """
 
-    def __init__(self, start, end):
-        '''defines a range of cells which can be given either impliclty or explicilty.
-          'start' and 'end' should be given as strings whose interpretation is
-          implemented in this class
+    def __init__(self, descriptor, coloffset=0, rowoffset=0):
+        """Cells can be given either explicitly or implicitly in the descriptor:
 
-        '''
+              * Explicitly: cells are identified by their coords, e.g., B24
 
-        # copy the given attributes
-        self._start, self._end = start, end
+              * Implicitly: cells are identified by their content. Either the
+                row or the column has to be explicitly given, e.g., $B[100] is
+                the cell in column B and any row whose content is precisely
+                equal to 100. It is also possible to give empty cells such as in
+                $[]3 which is the cell in the third row and any column was
+                content is empty
 
-        # and initialize the instantiated range to none
-        self._range = None
+           Additionally, cells can be reference with an offset (either positive
+           or negative) of columns and rows
 
+        """
+
+        # copy the attributes
+        self._descriptor, self._coloffset, self._rowoffset = descriptor, coloffset, rowoffset
+
+        # by default the location of this cell is unknown until the execution
+        # method is invoked
+        self._cell = None
+
+
+    def get_descriptor(self):
+        """ returns the descriptor of this cell"""
+
+        return self._descriptor
+
+
+    def get_coloffset(self):
+        """ returns the column offset of this cell"""
+
+        return self._coloffset
+
+
+    def get_rowoffset(self):
+        """ returns the row offset of this cell"""
+
+        return self._rowoffset
+
+    def get_cell(self):
+        """ returns the cell referenced by this instance"""
+
+        return self._cell
 
     def __str__(self):
-        """Provides a human readable representation of the contents of this instance"""
+        '''provides a human readable representation of the contents of this intance'''
 
-        if self._range:
-            return "{0}:{1} = {2}".format(self._start, self._end, self._range)
-        return "{0}:{1}".format(self._start, self._end)
+        if self._coloffset or self._rowoffset:
+            output = self._descriptor + \
+                " + (" + str(self._coloffset) + ", " + str(self._rowoffset) + ")"
+        else:
+            output = self._descriptor
 
+        # if this cell is already known
+        if self._cell:
+            output += " [{0}]".format(self._cell)
 
-    def _traverse_cells(self, cell, sheet, base=None):
-        """cell shall be given implicitly, i.e., either <column>[content] or
-           [content]<row> and it returns the specific cell in notation
-           <column><row> whose content matches 'content'.
+        # otherwise return a textual interpretation of the contents of this instance
+        return output
 
-           If a base is given, it should be also another specific cell given in
-           the format <column><row>. It then returns the cell which takes place
-           after it so that (base, cell) forms a proper range
+    def _traverse_cells(self, sheet, base=None):
+        """compute the exact location of this cell in a two-step process:
 
+           1. If the descriptor defines a cell in explictit form return it
+              immediately
+
+           2. If the descriptor defines a cell in implicit form then traverse
+              the given sheet in the right direction to determine its location
+
+           Note that step 2 requires access to the spreadsheet as given in
+           sheet. In addition a base can be given for computing the exact
+           location of cells defined implicitly. If a base is given, the
+           location to look for should be *after* the given base
+
+           This method entirely ignores the offset of this instance
         """
 
         # First things first, check whether the cell has been given explicitly
         # in the form <column><row>
-        if re.match(r'[a-zA-Z]+\d+', cell):
+        if re.match(r'[a-zA-Z]+\d+', self._descriptor):
 
             # in this case, the given cell is returned immediately in spite of
             # the base
-            return cell
+            return self._descriptor
 
         # Now, process the cell implicitly. The following regexp returns four
         # different groups (column0, row0, column1, row1), if the cell has been
         # given as <column0>[row0] or [column1]<row1>
         regexp0 = r'(?P<column0>[a-zA-Z]+)\[(?P<row0>.*)\]'
         regexp1 = r'\[(?P<column1>.*)\](?P<row1>\d+)'
-        match = re.match(regexp0 + '|' + regexp1, cell)
+        match = re.match(regexp0 + '|' + regexp1, self._descriptor)
         if not match:
-            raise ValueError(ERROR_INVALID_CELL_SPECIFICATION.format(cell))
+            raise ValueError(ERROR_INVALID_CELL_SPECIFICATION.format(self._descriptor))
 
         # process the base which should be given explicitly in the form
         # <column><row> if any was given. These values of column and cell are
@@ -315,15 +339,15 @@ class DBRange:
         else:
 
             # something went deeply wrong here!
-            raise ValueError(ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION.format(cell))
+            raise ValueError(ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION.format(self._descriptor))
 
         # verify now that this column and row are within the range of the
         # spreadsheet. If not immediately raise
         current = column + str(row)
         if structs.get_columnindex(column) >= sheet.column_range().stop:
-            raise IndexError(ERROR_COLUMN_INDEX.format(column, cell))
+            raise IndexError(ERROR_COLUMN_INDEX.format(column, self._descriptor))
         if int(row) > sheet.row_range().stop:
-            raise IndexError(ERROR_ROW_INDEX.format(row, cell))
+            raise IndexError(ERROR_ROW_INDEX.format(row, self._descriptor))
 
         # so just locate at the given row and column and proceed applying the
         # given delta until a cell is found with the specified contents. current
@@ -334,31 +358,88 @@ class DBRange:
             current = structs.add_columns(structs.add_rows(current, delta[1]), delta[0])
             (column, row) = structs.get_columnrow(current)
             if structs.get_columnindex(column) >= sheet.column_range().stop:
-                raise IndexError(ERROR_COLUMN_INDEX.format(column, cell))
+                raise IndexError(ERROR_COLUMN_INDEX.format(column, self._descriptor))
             if row > sheet.row_range().stop:
-                raise IndexError(ERROR_ROW_INDEX.format(row, cell))
+                raise IndexError(ERROR_ROW_INDEX.format(row, self._descriptor))
 
         # and return the cell that matches the contents given in the cell beyond
         # the base, if any was given
         return current
 
 
-    def get_range(self, sheet):
-        """returns an instantiated range of cells explicitly given, i.e., it computes
-           the specific cells that match the contents given in implicit
-           definitions. For this, it needs the actual contents of the sheet
-           under consideration.
+    def execute(self, sheet, base=None):
+        """determine the exact location this instance refers to in a two-step
+           process:
 
-           The start cell of the range is instantiated to the first cell that
-           matches the given contents; the end cell of the range also satisifies
-           that it goes after the start cell, so that a range can be properly
-           built
+           1. Translate the explicit/implicit definition of this cell to a
+              specific cell
+
+           2. Apply the offset of this instance to return the final location
+
+           Not that the first point might require access to the spreadsheet in
+           case the cell is defined implicitly. In addition, when looking for
+           the contents of a specific cell a base can be given so that the
+           resulting cell has to be *after* it
 
         """
 
-        # first, process the start of the range
-        start = self._traverse_cells(self._start, sheet)
-        end = self._traverse_cells(self._end, sheet, start)
+        # step 1 - translate the definition into a specific cell, and
+        # step 2 - add the given offset in columns and rows
+        self._cell = structs.add_rows(structs.add_columns(self._traverse_cells(sheet, base),
+                                                          self._coloffset),
+                                      self._rowoffset)
+        return self._cell
+
+
+# -----------------------------------------------------------------------------
+# DBRange
+#
+# Definition of a range of cells given as instances of DBCellReference
+#
+# The second cell has to be *after* the first one. However, if the user gave an
+# offset this rule might be easily broken
+# -----------------------------------------------------------------------------
+class DBRange:
+    """Definition of a range of cells given as instances of DBCellReference
+
+       The second cell has to be *after* the first one. However, if the user
+       gave an offset this rule might be easily broken
+
+    """
+
+    def __init__(self, start, end):
+        '''defines a range of cells which can be given either impliclty or explicilty.
+          'start' and 'end' should be given as instances of DBCellReference
+
+        '''
+
+        # copy the given attributes
+        self._start, self._end = start, end
+
+        # and initialize the instantiated range to none
+        self._range = None
+
+
+    def __str__(self):
+        """Provides a human readable representation of the contents of this instance"""
+
+        if self._range:
+            return "{0}:{1} = {2}".format(self._start, self._end, self._range)
+        return "{0}:{1}".format(self._start, self._end)
+
+
+    def get_range(self, sheet):
+        """returns an instantiated range of cells explicitly given, i.e., it computes
+           the specific cells that result of *executing* (i.e., translating) the
+           start and end of this range, either if they are given in
+           implicit/explicit form and after adding the offset if any is given
+
+        """
+
+        # first, compute the exact locations of the start and end cells of this
+        # range
+        start = self._start.execute(sheet)
+        end = self._end.execute(sheet, start)
 
         # and return a range properly formed with these cells
         self._range = structs.Range([start, end])
