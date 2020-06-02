@@ -33,8 +33,11 @@ from . import dbstructs
 
 # -- errors
 ERROR_INVALID_CHAR = "Illegal character '{0}'"
-ERROR_SYNTAX_ERROR = " Syntax error in line {0} near '{1}': unexpected token {2} found"
+ERROR_SYNTAX_ERROR = "Syntax error in line {0} near '{1}': unexpected token {2} found"
 
+# -- warning
+WARNING_FLOATING_COLUMN_OFFSET = "WARNING: Column offset given as a floating-point number in '{0}'. It is automatically casted to an integer"
+WARNING_FLOATING_ROW_OFFSET = "WARNING: Row offset given as a floating-point number in '{0}'. It is automatically casted to an integer"
 
 # classes
 # -----------------------------------------------------------------------------
@@ -84,6 +87,7 @@ class DBParser:
         'LPARENTHESIS',
         'RPARENTHESIS',
         'SEMICOLON',
+        'PLUS',
         'COLON',
         'COMMA',
         'ID',
@@ -108,6 +112,7 @@ class DBParser:
     t_LPARENTHESIS = r'\('
     t_RPARENTHESIS = r'\)'
     t_SEMICOLON = r';'
+    t_PLUS = r'\+'
     t_COLON = r':'
     t_COMMA = r','
 
@@ -404,28 +409,44 @@ class DBParser:
 
         p[0] = dbstructs.DBExplicit(p[1])
 
-    # Cells can be given either explicitly (e.g., $B24) or in conditional form,
-    # e.g., $B(100). In case conditional cells are used for describing a range
-    # (i.e., when using the colon), the second cell has to be sorted after the
-    # first one
+    # Cells
     #
-    # Also, a range can be given with either just only one cell (described in
-    # either form), or a couple of cells separated by a colon
-    #
-    # In any case, cells can be qualified with an offset in the form (<columns>,
-    # <rows>)
+    # A range can be given with either just only one cell (described in either
+    # form), or a couple of cells separated by a colon. If cells are given
+    # either implicitly or explicitly, the second one defining the range should
+    # be *after* the first one. This is not necessarily true, however, if an
+    # offset is given as the user could break this rule
     def p_range(self, p):
-        '''range : CELL
-                 | CELL COLON CELL'''
+        '''range : cell
+                 | cell COLON cell'''
 
-        # note that in the following, dbranges are built after removing the
-        # leading '$'
         if len(p) == 2:
-            p[0] = dbstructs.DBRange(dbstructs.DBCellReference(p[1][1:]),
-                                     dbstructs.DBCellReference(p[1][1:]))
+            p[0] = dbstructs.DBRange(p[1])
         else:
-            p[0] = dbstructs.DBRange(dbstructs.DBCellReference(p[1][1:]),
-                                     dbstructs.DBCellReference(p[3][1:]))
+            p[0] = dbstructs.DBRange(p[1], p[3])
+
+    # cells can be given either explicitly (e.g., $B24) or in conditional form,
+    # e.g., $B[100]. In any case, cells can be qualified with an offset in the
+    # form (<columns>, <rows>)
+    def p_cell(self, p):
+        '''cell : CELL
+                | CELL PLUS LPARENTHESIS NUMBER COMMA NUMBER RPARENTHESIS'''
+
+        # note that in the following, cells are built after removing the leading
+        # '$'
+        if len(p) == 2:
+            p[0] = dbstructs.DBCellReference(p[1][1:])
+
+        else:
+
+            # check if the offset was given using floating-point numbers. If so,
+            # immediately issue a warning
+            if isinstance(p[4], float):
+                print(WARNING_FLOATING_COLUMN_OFFSET.format(p[1]))
+            if isinstance(p[6], float):
+                print(WARNING_FLOATING_ROW_OFFSET.format(p[1]))
+
+            p[0] = dbstructs.DBCellReference(p[1][1:], int(p[4]), int(p[6]))
 
     # note that the only allowed types are numbers (either integers or
     # floating-point numbers), strings and time specifications
