@@ -40,6 +40,8 @@ ERROR = " Error - {0}"
 ERROR_INVALID_CELL_SPECIFICATION = "The cell '{0}' is not a legal expression, neither implicit nor explicitly"
 ERROR_INVALID_EXPLICIT_CELL_SPECIFICATION = "The cell '{0}' is not a legal explicit cell"
 ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION = "The cell '{0}' is not a legal implicit cell"
+ERROR_COLUMN_INDEX = "Column {0} out of index while looking for cell '{1}'"
+ERROR_ROW_INDEX = "Row {0} out of index while looking for cell '{1}'"
 ERROR_CAST_COLUMN = "It was not possible to cast the default value '{0}' defined for column '{1}' to the type '{2}'"
 ERROR_CAST_DBCOLUMN = "It was not possible to cast the value '{0}' in '{1}::{2}' to the type {3}"
 ERROR_CAST_CELL = "It was not possible to cast the value '{0}' found in cell {1} in '{2}::{3}' to the type {4}"
@@ -281,8 +283,8 @@ class DBRange:
         # Now, process the cell implicitly. The following regexp returns four
         # different groups (column0, row0, column1, row1), if the cell has been
         # given as <column0>[row0] or [column1]<row1>
-        regexp0 = r'(?P<column0>[a-zA-Z]+)\[(?P<row0>[^\]]*)\]'
-        regexp1 = r'\[(?P<column1>[^\]]*)\](?P<row1>\d+)'
+        regexp0 = r'(?P<column0>[a-zA-Z]+)\[(?P<row0>.*)\]'
+        regexp1 = r'\[(?P<column1>.*)\](?P<row1>\d+)'
         match = re.match(regexp0 + '|' + regexp1, cell)
         if not match:
             raise ValueError(ERROR_INVALID_CELL_SPECIFICATION.format(cell))
@@ -297,13 +299,13 @@ class DBRange:
             column, row = 'A', 1
 
         # if the cell was given in the format <colum>[content]
-        if match.groups()[0] and match.groups()[1]:
+        if match.groups()[0] is not None and match.groups()[1] is not None:
 
             # then the increment between adjacent cells should proceed by rows,
             # and the content to match is given in
             column, delta, content = match.groups()[0], (0, 1), match.groups()[1]
 
-        elif match.groups()[2] and match.groups()[3]:
+        elif match.groups()[2] is not None and match.groups()[3] is not None:
 
             # if otherwise, this cell was given in the format [content]<row>
             # then the increment should proceed by columns, and the content was
@@ -315,14 +317,26 @@ class DBRange:
             # something went deeply wrong here!
             raise ValueError(ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION.format(cell))
 
+        # verify now that this column and row are within the range of the
+        # spreadsheet. If not immediately raise
+        current = column + str(row)
+        if structs.get_columnindex(column) >= sheet.column_range().stop:
+            raise IndexError(ERROR_COLUMN_INDEX.format(column, cell))
+        if int(row) > sheet.row_range().stop:
+            raise IndexError(ERROR_ROW_INDEX.format(row, cell))
+
         # so just locate at the given row and column and proceed applying the
         # given delta until a cell is found with the specified contents. current
         # is the cell examined at each iteration
-        current = column + str(row)
         while sheet[current] != content:
 
             # move to the next cell
             current = structs.add_columns(structs.add_rows(current, delta[1]), delta[0])
+            (column, row) = structs.get_columnrow(current)
+            if structs.get_columnindex(column) >= sheet.column_range().stop:
+                raise IndexError(ERROR_COLUMN_INDEX.format(column, cell))
+            if row > sheet.row_range().stop:
+                raise IndexError(ERROR_ROW_INDEX.format(row, cell))
 
         # and return the cell that matches the contents given in the cell beyond
         # the base, if any was given
