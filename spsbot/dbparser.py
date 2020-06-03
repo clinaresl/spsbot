@@ -66,12 +66,13 @@ class DBParser:
         'None'      : 'NONE',
         'Warning'   : 'WARNING',
         'Error'     : 'ERROR',
-        'unique'    : 'UNIQUE',
+        'check_unique'     : 'CHECK_UNIQUE',
         'check_duplicates' : 'CHECK_DUPLICATES',
         'geq'       : 'GEQ',
         'leq'       : 'LEQ',
         'eq'        : 'EQ',
         'neq'       : 'NEQ',
+        'unique'    : 'UNIQUE',
         'index'     : 'INDEX',
         'key'       : 'KEY'
         }
@@ -277,13 +278,13 @@ class DBParser:
                      | modifier modifiers'''
 
         if len(p) == 2:
-            p[0] = [p[1]]
+            p[0] = dbstructs.DBContext(p[1])
         else:
-            p[0] = [p[1]] + p[2]
+            p[0] = dbstructs.DBContext(p[1]) + p[2]
 
     # the acknowledged modifiers are shown next
     def p_modifier(self, p):
-        '''modifier : UNIQUE SEMICOLON
+        '''modifier : CHECK_UNIQUE SEMICOLON
                     | CHECK_DUPLICATES SEMICOLON
                     | GEQ NUMBER SEMICOLON
                     | LEQ NUMBER SEMICOLON

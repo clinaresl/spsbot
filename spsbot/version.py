@@ -12,7 +12,7 @@
 Version number and other related info
 """
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 __revision__ = "master"
 __date__ = "mar 18 feb 2020 12:02:45 CET"
 __author__ = "Carlos Linares López"

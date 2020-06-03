@@ -454,7 +454,7 @@ class DBRange:
 # -----------------------------------------------------------------------------
 class DBContents:
     """Definition of a collection of contents which can be either ranges of cells
-    or contents explicitly given. This container provides an iterator
+       or contents explicitly given. This container provides an iterator
 
     """
 
@@ -805,6 +805,95 @@ class DBModifier:
 
 
 # -----------------------------------------------------------------------------
+# DBContext
+#
+# Contexts are defined as containers of block modifiers. Contexts contain
+# variables that can be used in the description of blockx
+# -----------------------------------------------------------------------------
+class DBContext:
+    """Contexts are defined as containers of block modifiers. Contexts contain
+       variables that can be used in the description of blockx
+
+    """
+
+    def __init__(self, modifier):
+        '''Initializes this context with the given modifier which shall be given as an
+        instance of DBModifier
+
+        '''
+
+        # initialize the list ---note that it holds no default values
+        # intentionally to avoid mistakes, so that only values defined in the
+        # context can be used later
+        self._modifiers = [modifier]
+
+        # initialize the counter used in the iteration
+        self._current = 0
+
+
+    def __add__(self, right):
+        """add the context given in right (as an instance of DBContext) to this context.
+           It overwrites previous contents in case the variable already exists
+           in this context
+
+        """
+
+        for imodifier in right:
+
+            # if this modififer already exists, delete it first
+            if imodifier.get_name() in self._modifiers:
+                self._modifiers.remove(imodifier)
+
+            # add the given modifier and return this instance
+            self._modifiers.append(imodifier)
+
+        return self
+
+
+    def __contains__(self, other):
+        """return true if and only if there is a mdoifier in this context whose name
+           matches other"""
+
+        return other in self._modifiers
+
+
+    def __str__(self):
+        """return a human readable version of the contents of this context"""
+
+        output = ""
+        for imodifier in self._modifiers:
+            output += "{0}\n".format(imodifier)
+        return output
+
+    def __iter__(self):
+        '''defines the simplest case for iterators'''
+
+        return self
+
+    def __next__(self):
+        '''returns the next cell with the format <string><number> where string
+           represents the column and number stands for the row
+
+        '''
+
+        # if we did not reach the limit
+        if self._current < len(self._modifiers):
+
+            # we will return this location, so we increment first
+            imodifier = self._modifiers[self._current]
+            self._current += 1
+
+            # and decrement prior to execute the return statement
+            return imodifier
+
+        # restart the iterator for subsequent invocations of it
+        self._current = 0
+
+        # and stop the current iteration
+        raise StopIteration()
+
+
+# -----------------------------------------------------------------------------
 # DBBlock
 #
 # Provides the definition of a table block. A block consists of a definition of
@@ -816,14 +905,14 @@ class DBBlock:
     different columns
     """
 
-    def __init__(self, columns, modifiers=[]):
+    def __init__(self, columns, context=None):
         '''initializes a block as a sequence of columns. Columns shall be given as a
            list of instances of DBColumn. Modifiers affect the behaviour of the
-           table and should be given as a list of instances of DBModifier
+           table and should be given within a context as an instance of DBContext
 
            Valid modifiers are the following:
 
-              * unique: discard duplicated rows without further ado
+              * check_unique: discard duplicated rows without further ado
 
               * check_duplicates: verifies that all rows are diff. If not, a
                 warning is shown but still all rows are inserted into the table
@@ -852,7 +941,7 @@ class DBBlock:
         '''
 
         # copy the attributes
-        self._columns, self._modifiers = columns, modifiers
+        self._columns, self._context = columns, context
 
         # process all columns to get a list of all primary keys
         self._keys = []
@@ -889,10 +978,10 @@ class DBBlock:
 
         return self._keys
 
-    def get_modifiers(self):
-        """return the modifiers of this block"""
+    def get_context(self):
+        """return the context of this block"""
 
-        return self._modifiers
+        return self._context
 
     def get_uniques(self):
         """return all columns in this block subjected to the SQL UNIQUE constraint"""
@@ -925,10 +1014,10 @@ class DBBlock:
 
         output = str()                         # initialize the output string
 
-        # first, show the modifiers of this block, if any
-        if self._modifiers:
-            output += "\t Modifiers: \n"
-            for imodifier in self._modifiers:
+        # first, show the context of this block, if any
+        if self._context:
+            output += "\t Context: \n"
+            for imodifier in self._context:
                 output += "\t\t {0}\n".format(imodifier)
             output += "\n"
 
@@ -964,7 +1053,7 @@ class DBBlock:
         # in preparation to create rows (by aligning the data of all columns),
         # create a default dict that registers the number of occurrences of each
         # row. This dictionary is then used by modifiers
-        # unique/check_duplicates. Also count the number of rows finally
+        # check_unique/duplicates. Also count the number of rows finally
         # generated
         nbrows = 0
         unique = defaultdict(int)
@@ -990,9 +1079,9 @@ class DBBlock:
                 if unique[row] > 1:
 
                     # if check-duplicates was requested
-                    if 'check_duplicates' in self._modifiers:
+                    if self._context and 'check_duplicates' in self._context:
                         print(WARNING_DUPLICATED_ROW.format(row))
-                    if 'unique' in self._modifiers:
+                    if self._context and 'check_unique' in self._context:
                         continue
 
                 # add this tuple and increment the number of accepted rows
@@ -1000,26 +1089,27 @@ class DBBlock:
                 data.append(row)
 
         # apply now modifiers related to the number of tuples to be generated
-        for imodifier in self._modifiers:
-            if imodifier == 'geq':
-                arg = imodifier.get_args()[0]
-                if arg > nbrows:
-                    print(WARNING_LESS.format(nbrows, arg))
+        if self._context:
+            for imodifier in self._context:
+                if imodifier == 'geq':
+                    arg = imodifier.get_args()[0]
+                    if arg > nbrows:
+                        print(WARNING_LESS.format(nbrows, arg))
 
-            if imodifier == 'leq':
-                arg = imodifier.get_args()[0]
-                if arg < nbrows:
-                    print(WARNING_GREATER.format(nbrows, arg))
+                if imodifier == 'leq':
+                    arg = imodifier.get_args()[0]
+                    if arg < nbrows:
+                        print(WARNING_GREATER.format(nbrows, arg))
 
-            if imodifier == 'eq':
-                arg = imodifier.get_args()[0]
-                if arg != nbrows:
-                    print(WARNING_NOT_EQUAL.format(nbrows, arg))
+                if imodifier == 'eq':
+                    arg = imodifier.get_args()[0]
+                    if arg != nbrows:
+                        print(WARNING_NOT_EQUAL.format(nbrows, arg))
 
-            if imodifier == 'neq':
-                arg = imodifier.get_args()[0]
-                if arg == nbrows:
-                    print(WARNING_EQUAL.format(nbrows, arg))
+                if imodifier == 'neq':
+                    arg = imodifier.get_args()[0]
+                    if arg == nbrows:
+                        print(WARNING_EQUAL.format(nbrows, arg))
 
         # and return all data retrieved from the spreadsheet in the form of a
         # list of tuples, ready to be inserted into the database
