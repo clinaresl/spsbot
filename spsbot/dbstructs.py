@@ -42,12 +42,14 @@ ERROR_INVALID_EXPLICIT_CELL_SPECIFICATION = "The cell '{0}' is not a legal expli
 ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION = "The cell '{0}' is not a legal implicit cell"
 ERROR_COLUMN_INDEX = "Column {0} out of index while looking for cell '{1}'"
 ERROR_ROW_INDEX = "Row {0} out of index while looking for cell '{1}'"
+ERROR_UNKNOWN_TYPE = "The default value '{0}' defined for column '{1}' is an instance of an unknown type '{2}'"
 ERROR_CAST_COLUMN = "It was not possible to cast the default value '{0}' defined for column '{1}' to the type '{2}'"
 ERROR_CAST_DBCOLUMN = "It was not possible to cast the value '{0}' in '{1}::{2}' to the type {3}"
 ERROR_CAST_CELL = "It was not possible to cast the value '{0}' found in cell {1} in '{2}::{3}' to the type {4}"
 ERROR_EXTENT = "It is not possible to extend column '{0}' which contains {1} items to hold {2} items"
 ERROR_NO_DATA = "No data was found in cell '{0}' in '{1}::{2}'"
 ERROR_CONTENT_UNKNOWN_TYPE = "Unknown type for content {0}"
+ERROR_KEY_NOT_FOUND_IN_CONTEXT = "Modifier '{0}' not found in context"
 ERROR_DIFF_BLOCKS = """The block
 {0}
 
@@ -130,11 +132,10 @@ class DBAction:
         # apply the action specified in this instance
         if self._action == 'Error':                             # in case of error
 
-            # issue a message and exit
-            print(ERROR.format(message))
-            sys.exit(0)
+            # raise an error
+            raise RuntimeError(message)
 
-        elif self._action == 'Warning':                         # in case of warning
+        if self._action == 'Warning':                           # in case of warning
 
             # show a warning message and use the default value defined for this
             # column
@@ -158,14 +159,15 @@ class DBAction:
                     data = int(data)
                 elif ctype == 'real':
                     data = float(data)
-                elif ctype == 'text':
+                elif ctype in ['text', 'datetime', 'date']:
                     data = str(data)
+                else:
+                    raise TypeError(ERROR_UNKNOWN_TYPE.format(data, name, ctype))
 
             except:
 
-                # if it was not possible then exit with an error
-                print(ERROR_CAST_COLUMN.format(data, name, ctype))
-                sys.exit(0)
+                # if it was not possible then raise an error
+                raise TypeError(ERROR_CAST_COLUMN.format(data, name, ctype))
 
         # finally, return the default value as computed here
         return data
@@ -221,12 +223,26 @@ class DBCellReference:
 
               * Explicitly: cells are identified by their coords, e.g., B24
 
-              * Implicitly: cells are identified by their content. Either the
-                row or the column has to be explicitly given, e.g., $B[100] is
-                the cell in column B and any row whose content is precisely
-                equal to 100. It is also possible to give empty cells such as in
-                $[]3 which is the cell in the third row and any column was
-                content is empty
+              * Implicitly: cells can be identified by various means:
+
+                + By the global length. Either the row or the column or both can
+                  be automatically determined such that the length of the
+                  resulting range is equal to the length given in the context of
+                  a block. This definition requires another cell to be used in
+                  the comparison, e.g., $B* should be equal to $B6 if if it is
+                  given with either $B4 or $B8 and length is 3
+
+                + By the range. Either the row or the column or both can be
+                  automatically determined using the range of rows and columns
+                  of the current sheet, e.g., $B. would be $B6 if the number of
+                  rows equals 6 and $.3 would be equal to $H3 if the number of
+                  columns equals 8
+
+                + By their content. Either the row or the column has to be
+                  explicitly given, e.g., $B[100] is the cell in column B and
+                  any row whose content is precisely equal to 100. It is also
+                  possible to give empty cells such as in $[]3 which is the cell
+                  in the third row and any column was content is empty
 
            Additionally, cells can be reference with an offset (either positive
            or negative) of columns and rows
@@ -279,6 +295,68 @@ class DBCellReference:
         # otherwise return a textual interpretation of the contents of this instance
         return output
 
+
+    def _do_range(self, context):
+        """substitutes the '.' symbol in the description of this cell using the range
+           values given in the context. This is a destructive function which
+           overwrites the contents of self._descriptor
+
+           The '.' can be used freely even in conjunction with other implicit
+           operators such as [content] and '*'. It is even possible to use the
+           dot '.' with itself as in $..
+
+           If the dot appears in the column position of the descriptor of this
+           instance, then it is substituted by the last column in the current
+           range; likewise, if it appears in the row position, then it is
+           substituted with the last row in the current range
+
+           This operator enables reusability of the same db description files
+           even if the contents of the spreadsheet change
+
+        """
+
+        # does the dot appear in the column? Note that we just simply verify
+        # that the first character is the dot.
+        if self._descriptor[0] == '.':
+
+            # In the following, one is substracted from the value of the column
+            # as retrieved from the context, because structs.get_getcolumnname
+            # numbers columns from zero so that 'A' is 0 but pyexcel would give
+            # this column the value 1
+            self._descriptor = structs.get_columnname(context["max_column"][0]-1) + \
+                self._descriptor[1:]
+
+        # does the dot appear in the row? Note that we just simply verify that
+        # the last character is the dot
+        if self._descriptor[-1] == '.':
+            self._descriptor = self._descriptor[:-1] + str(context["max_row"][0])
+
+
+    def _do_length(self, ref, context):
+        """substitutes the '*' symbol in the description of this cell using the
+           reference description such that both cells create a range equal to
+           the length reported in the context.
+
+           The following descriptions assume that the descriptor of this cell
+           contains '*' whereas the reference cell does not. Indeed, '*' can not
+           be present in both the descriptor of this cell and the reference one,
+           i.e., the reference one should be fully qualified and therefore there
+           is no point in dissambiguating it
+
+           1. Determine where the '*' is given in the descriptor
+
+           2. The value of '*' is obtained from an offset that can be either
+              added or substracted. The offset is equal to the length reported
+              in the context divided by the absolute value of the difference
+              between the other coordinates (plus one, to include both)
+
+           3. If the 'non-*' coordinate of the descriptor is less than the
+              'non-*' coordinate of the reference cell, then offset has to be
+              substracted to the other coordinate
+
+        """
+
+    
     def _traverse_cells(self, sheet, base=None):
         """compute the exact location of this cell in a two-step process:
 
@@ -367,7 +445,7 @@ class DBCellReference:
         return current
 
 
-    def execute(self, sheet, base=None):
+    def execute(self, context, sheet, base=None):
         """determine the exact location this instance refers to in a two-step
            process:
 
@@ -376,15 +454,16 @@ class DBCellReference:
 
            2. Apply the offset of this instance to return the final location
 
-           Not that the first point might require access to the spreadsheet in
-           case the cell is defined implicitly. In addition, when looking for
-           the contents of a specific cell a base can be given so that the
-           resulting cell has to be *after* it
+           Not that the first point might require access to the context and/or
+           the spreadsheet in case the cell is defined implicitly. In addition,
+           when looking for the contents of a specific cell a base can be given
+           so that the resulting cell has to be *after* it
 
         """
 
-        # step 1 - translate the definition into a specific cell, and
-        # step 2 - add the given offset in columns and rows
+        # update the descriptor of this instance if the dot operator '.' was
+        # used
+        self._do_range(context)
         self._cell = structs.add_rows(structs.add_columns(self._traverse_cells(sheet, base),
                                                           self._coloffset),
                                       self._rowoffset)
@@ -428,18 +507,21 @@ class DBRange:
         return "{0}:{1}".format(self._start, self._end)
 
 
-    def get_range(self, sheet):
-        """returns an instantiated range of cells explicitly given, i.e., it computes
-           the specific cells that result of *executing* (i.e., translating) the
-           start and end of this range, either if they are given in
-           implicit/explicit form and after adding the offset if any is given
+    def get_range(self, context, sheet):
+        """returns an instantiated range of cells, i.e., it computes the specific cells
+           that result of *executing* (i.e., translating) the start and end of
+           this range, either if they are given in implicit/explicit form and
+           after adding the offset if any is given
+
+           The context and sheet might be necessary in case any cell is given in
+           implicit form.
 
         """
 
         # first, compute the exact locations of the start and end cells of this
         # range
-        start = self._start.execute(sheet)
-        end = self._end.execute(sheet, start)
+        start = self._start.execute(context, sheet)
+        end = self._end.execute(context, sheet, start)
 
         # and return a range properly formed with these cells
         self._range = structs.Range([start, end])
@@ -539,9 +621,19 @@ class DBColumn:
         '''defines a column with the given name which should be populated with the
            specified contents. Contents can be either ranges of cells whose
            value has to be retrieved from the database or data explicitly given
+           and should be given as instances of DBContents
 
            All data read should be automatically casted into the given ctype. In
-           case a cell contains no data, the specified action should be raised
+           case a cell contains no data, the specified action should be raised.
+           Actions should be one among:
+
+           Error - raises an exception immediately stopping execution
+           Warning - warns the user and resumes execution
+           None - nothing is done
+
+           If the action is either warning or none, a default value can be given
+           to be inserted when nothing is found in the spreadsheet. Default
+           values are automatically casted to the column types
 
            Additionally, any qualifiers can be given in the last parameter.
            Values accepted are listed below:
@@ -637,11 +729,15 @@ class DBColumn:
         return self._data
 
 
-    def lookup(self, spsname, sheetname=None):
+    def lookup(self, context, spsname, sheetname=None):
         '''returns the contents of this column. If it consists of data explicitly given,
            then it returns it right away after casting it to the appropriate
            type; if the contents of this column consist of ranges of cells, then
            it access the spreadsheet to retrieve them
+
+           Columns accept ranges in various implicit formats. For
+           dissambiguating them, the context of the block this column belongs to
+           is necessary.
 
            In case the sheet has to be used, if a sheetname is given, then data
            is retrieved from the specified one
@@ -696,7 +792,7 @@ class DBColumn:
                     sheet = pyexcel.get_sheet(file_name=spsname, sheet_name=sheetname)
 
                 # now, for all cells in the range instantiated of this dbrange
-                for cell in content.get_range(sheet):
+                for cell in content.get_range(context, sheet):
 
                     # access the data
                     try:
@@ -857,6 +953,27 @@ class DBContext:
         return other in self._modifiers
 
 
+    def __getitem__(self, key):
+        """Called to implement evaluation of self[key]. If key does not exist, an
+           exception is immediately raised"""
+
+        if key not in self._modifiers:
+            raise KeyError(ERROR_KEY_NOT_FOUND_IN_CONTEXT.format(key))
+        return self._modifiers[self._modifiers.index(key)].get_args()
+
+
+    def __setitem__(self, key, value):
+        """Called to implement assignment to self[key]. If key exists it is
+           overwritten"""
+
+        if key in self._modifiers:
+            self._modifiers[self._modifiers.index(key)] = DBModifier(key, value)
+        else:
+            self._modifiers.append(DBModifier(key, value))
+
+        return self
+
+
     def __str__(self):
         """return a human readable version of the contents of this context"""
 
@@ -912,7 +1029,7 @@ class DBBlock:
 
            Valid modifiers are the following:
 
-              * check_unique: discard duplicated rows without further ado
+              * enforce_unique: discard duplicated rows without further ado
 
               * check_duplicates: verifies that all rows are diff. If not, a
                 warning is shown but still all rows are inserted into the table
@@ -928,6 +1045,10 @@ class DBBlock:
 
               * neq <NUMBER>: verifies that the number of rows generated is
                 strictly different than the given NUMBER
+
+              * len <NUMBER>: provides the number of consecutive cells to read
+                in those cases where a range is given as <START>: (i.e., without
+                explicitly giving an <END>)
 
            In addition, a number of different qualiiers can be given on
            individual columns on any combination:
@@ -1036,13 +1157,26 @@ class DBBlock:
         # --- initialization
         maxlen = 0                      # length of the longest column
 
+        # first, gain access to the spreadsheet
+        if not sheetname:
+            sheet = pyexcel.get_sheet(file_name=spsname)
+            sheetname = sheet.name          # and copy the first sheet's name
+        else:
+            sheet = pyexcel.get_sheet(file_name=spsname, sheet_name=sheetname)
+
+        # ensure that the context of this block contains all necessary
+        # information for dissambiguating some implicit formats of ranges that
+        # might be given in its columns
+        self._context["max_column"] = sheet.column_range().stop
+        self._context["max_row"] = sheet.row_range().stop
+
         # iterate over all columns to look up the spreadsheet
         for column in self._columns:
 
             print(" \t > Looking up column {0}".format(column.get_name()))
 
             # look up this specific table
-            column.lookup(spsname, sheetname)
+            column.lookup(self._context, spsname, sheetname)
             maxlen = max(maxlen, len(column.get_data()))
 
         # now, make sure that all columns have the same length
@@ -1053,7 +1187,7 @@ class DBBlock:
         # in preparation to create rows (by aligning the data of all columns),
         # create a default dict that registers the number of occurrences of each
         # row. This dictionary is then used by modifiers
-        # check_unique/duplicates. Also count the number of rows finally
+        # enforce_unique/check_duplicates. Also count the number of rows finally
         # generated
         nbrows = 0
         unique = defaultdict(int)
@@ -1081,7 +1215,7 @@ class DBBlock:
                     # if check-duplicates was requested
                     if self._context and 'check_duplicates' in self._context:
                         print(WARNING_DUPLICATED_ROW.format(row))
-                    if self._context and 'check_unique' in self._context:
+                    if self._context and 'enforce_unique' in self._context:
                         continue
 
                 # add this tuple and increment the number of accepted rows

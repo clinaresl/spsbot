@@ -123,7 +123,7 @@ def get_columnname(columnindex):
     pos = 0                                     # compute digits upwards
     result = str()                              # starting with the empty str
 
-    base = 1 + ord('Z') - ord('A')            # yeah, 26 ... obviously?
+    base = 1 + ord('Z') - ord('A')              # yeah, 26 ... obviously?
     while True:
 
         # compute this digit as the remainder with the base of the next position

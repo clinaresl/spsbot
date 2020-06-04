@@ -36,8 +36,10 @@ ERROR_INVALID_CHAR = "Illegal character '{0}'"
 ERROR_SYNTAX_ERROR = "Syntax error in line {0} near '{1}': unexpected token {2} found"
 
 # -- warning
-WARNING_FLOATING_COLUMN_OFFSET = "WARNING: Column offset given as a floating-point number in '{0}'. It is automatically casted to an integer"
-WARNING_FLOATING_ROW_OFFSET = "WARNING: Row offset given as a floating-point number in '{0}'. It is automatically casted to an integer"
+WARNING_FLOATING_MODIFIER = "WARNING: Modifier '{0}' is qualified with a floating-point number '{1}'. It is automatically casted to an integer"
+WARNING_FLOATING_COLUMN_OFFSET = "WARNING: Column offset '{0}' given as a floating-point number in '{1}'. It is automatically casted to an integer"
+WARNING_FLOATING_ROW_OFFSET = "WARNING: Row offset '{0}' given as a floating-point number in '{1}'. It is automatically casted to an integer"
+
 
 # classes
 # -----------------------------------------------------------------------------
@@ -66,12 +68,13 @@ class DBParser:
         'None'      : 'NONE',
         'Warning'   : 'WARNING',
         'Error'     : 'ERROR',
-        'check_unique'     : 'CHECK_UNIQUE',
+        'enforce_unique'   : 'ENFORCE_UNIQUE',
         'check_duplicates' : 'CHECK_DUPLICATES',
         'geq'       : 'GEQ',
         'leq'       : 'LEQ',
         'eq'        : 'EQ',
         'neq'       : 'NEQ',
+        'len'       : 'LEN',
         'unique'    : 'UNIQUE',
         'index'     : 'INDEX',
         'key'       : 'KEY'
@@ -172,10 +175,19 @@ class DBParser:
     # If they are given explicitly, then they are of the form <column><row>,
     # where the column is made of alpha characters and the row is made of digits
     #
-    # If otherwise, it is given implicitly, then either the row or the column is
-    # characterized by its content between square brackets
+    # If otherwise, it is given implicitly:
+    #
+    #    1. Defined by the range: the row and or the column can be given with a
+    #       dot '.' which is then substituted with the last row/column
+    #       respectively of the spreadsheet
+    #
+    #    2. Defined by the content: either the row or the column is
+    #       characterized by its content between square brackets
+    #
+    # Note that it is forbidden to use the dot '.' operator with the content
+    # operator '[]' in the description of the same cell
     def t_CELL(self, t):
-        r'\$[a-zA-Z]+\d+|\$[a-zA-Z]+\[[^\]]*\]|\$\[[^\]]*\]\d+'
+        r'\$(\.|[a-zA-Z]+)(\.|\d+)|\$[a-zA-Z]+\[[^\]]*\]|\$\[[^\]]*\]\d+'
 
         return t
 
@@ -284,16 +296,19 @@ class DBParser:
 
     # the acknowledged modifiers are shown next
     def p_modifier(self, p):
-        '''modifier : CHECK_UNIQUE SEMICOLON
+        '''modifier : ENFORCE_UNIQUE SEMICOLON
                     | CHECK_DUPLICATES SEMICOLON
                     | GEQ NUMBER SEMICOLON
                     | LEQ NUMBER SEMICOLON
                     | EQ NUMBER SEMICOLON
-                    | NEQ NUMBER SEMICOLON'''
+                    | NEQ NUMBER SEMICOLON
+                    | LEN NUMBER SEMICOLON'''
 
         if len(p) == 3:
             p[0] = dbstructs.DBModifier(p[1])
         else:
+            if isinstance(p[2], float):
+                print(WARNING_FLOATING_MODIFIER.format(p[1], p[2]))
             p[0] = dbstructs.DBModifier(p[1], p[2])
 
     def p_columns(self, p):
@@ -422,7 +437,7 @@ class DBParser:
                  | cell COLON cell'''
 
         if len(p) == 2:
-            p[0] = dbstructs.DBRange(p[1])
+            p[0] = dbstructs.DBRange(p[1], p[1])
         else:
             p[0] = dbstructs.DBRange(p[1], p[3])
 
@@ -443,9 +458,9 @@ class DBParser:
             # check if the offset was given using floating-point numbers. If so,
             # immediately issue a warning
             if isinstance(p[4], float):
-                print(WARNING_FLOATING_COLUMN_OFFSET.format(p[1]))
+                print(WARNING_FLOATING_COLUMN_OFFSET.format(p[4], p[1]))
             if isinstance(p[6], float):
-                print(WARNING_FLOATING_ROW_OFFSET.format(p[1]))
+                print(WARNING_FLOATING_ROW_OFFSET.format(p[4], p[1]))
 
             p[0] = dbstructs.DBCellReference(p[1][1:], int(p[4]), int(p[6]))
 
