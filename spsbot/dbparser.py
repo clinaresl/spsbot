@@ -187,7 +187,7 @@ class DBParser:
     # Note that it is forbidden to use the dot '.' operator with the content
     # operator '[]' in the description of the same cell
     def t_CELL(self, t):
-        r'\$(\.|[a-zA-Z]+)(\.|\d+)|\$[a-zA-Z]+\[[^\]]*\]|\$\[[^\]]*\]\d+'
+        r'\$(\.|[a-zA-Z]+)(\.|\d+)|\$(\.|[a-zA-Z]+)\[[^\]]*\]|\$\[[^\]]*\](\.|\d+)'
 
         return t
 
