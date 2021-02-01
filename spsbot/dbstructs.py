@@ -1167,8 +1167,9 @@ class DBBlock:
         # ensure that the context of this block contains all necessary
         # information for dissambiguating some implicit formats of ranges that
         # might be given in its columns
-        self._context["max_column"] = sheet.column_range().stop
-        self._context["max_row"] = sheet.row_range().stop
+        if self._context:
+            self._context["max_column"] = sheet.column_range().stop
+            self._context["max_row"] = sheet.row_range().stop
 
         # iterate over all columns to look up the spreadsheet
         for column in self._columns:
