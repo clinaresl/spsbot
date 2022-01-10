@@ -229,7 +229,7 @@ class DBCellReference:
                   be automatically determined such that the length of the
                   resulting range is equal to the length given in the context of
                   a block. This definition requires another cell to be used in
-                  the comparison, e.g., $B* should be equal to $B6 if if it is
+                  the comparison, e.g., $B* should be equal to $B6 if it is
                   given with either $B4 or $B8 and length is 3
 
                 + By the range. Either the row or the column or both can be
@@ -242,9 +242,9 @@ class DBCellReference:
                   explicitly given, e.g., $B[100] is the cell in column B and
                   any row whose content is precisely equal to 100. It is also
                   possible to give empty cells such as in $[]3 which is the cell
-                  in the third row and any column was content is empty
+                  in the third row and any column whose content is empty
 
-           Additionally, cells can be reference with an offset (either positive
+           Additionally, cells can be referenced with an offset (either positive
            or negative) of columns and rows
 
         """
@@ -904,11 +904,11 @@ class DBModifier:
 # DBContext
 #
 # Contexts are defined as containers of block modifiers. Contexts contain
-# variables that can be used in the description of blockx
+# variables that can be used in the description of blocks
 # -----------------------------------------------------------------------------
 class DBContext:
     """Contexts are defined as containers of block modifiers. Contexts contain
-       variables that can be used in the description of blockx
+       variables that can be used in the description of blocks
 
     """
 
@@ -936,13 +936,15 @@ class DBContext:
 
         for imodifier in right:
 
-            # if this modififer already exists, delete it first
+            # if this modififer already exists, overwrite it by removing it the
+            # value stored in this instance
             if imodifier.get_name() in self._modifiers:
                 self._modifiers.remove(imodifier)
 
-            # add the given modifier and return this instance
+            # add the given modifier
             self._modifiers.append(imodifier)
 
+        # and return this instance
         return self
 
 

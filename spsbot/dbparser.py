@@ -177,7 +177,7 @@ class DBParser:
     #
     # If otherwise, it is given implicitly:
     #
-    #    1. Defined by the range: the row and or the column can be given with a
+    #    1. Defined by the range: the row and/or the column can be given with a
     #       dot '.' which is then substituted with the last row/column
     #       respectively of the spreadsheet
     #
