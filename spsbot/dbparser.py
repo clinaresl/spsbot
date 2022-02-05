@@ -178,14 +178,24 @@ class DBParser:
     # If otherwise, it is given implicitly:
     #
     #    1. Defined by the range: the row and/or the column can be given with a
-    #       dot '.' which is then substituted with the last row/column
-    #       respectively of the spreadsheet
+    #       dot '.' which is then substituted with the first/last row/column
+    #       respectively of the spreadsheet. '.' refers to the first row/column
+    #       if it appears in the first cell of the range as in $A.:$A20, and it
+    #       is the last element when appears in the second cell of the range as
+    #       in $B10:$.10
     #
     #    2. Defined by the content: either the row or the column is
-    #       characterized by its content between square brackets
+    #       characterized by its content between square brackets, e.g., $B[20]
+    #       which is then substituted by the cell in the first row of the column
+    #       B whose content is precisely equal to 20
     #
-    # Note that it is forbidden to use the dot '.' operator with the content
-    # operator '[]' in the description of the same cell
+    # Note that it is forbidden:
+    #
+    #    1. To use the dot '.' operator with the content operator '[]' in the
+    #       description of the same cell
+    #
+    #    2. To use the dot both for the row and the column in the same cell,
+    #       i.e., $..
     def t_CELL(self, t):
         r'\$(\.|[a-zA-Z]+)(\.|\d+)|\$(\.|[a-zA-Z]+)\[[^\]]*\]|\$\[[^\]]*\](\.|\d+)'
 

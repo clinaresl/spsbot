@@ -49,7 +49,7 @@ def main():
     database.create(args.db, args.append)
 
     print(" Inserting data into the database ...")
-    database.insert(args.db, args.spreadsheet, args.sheetname, args.override, args.append)
+    database.insert(args.db, args.spreadsheet, args.sheetname, args.override)
 
 
 # Main body

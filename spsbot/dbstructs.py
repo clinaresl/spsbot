@@ -72,6 +72,9 @@ WARNING_EQUAL = " Warning - {0} = {1} rows generated"
 WARNING_LESS = " Warning - {0} < {1} rows generated"
 WARNING_GREATER = " Warning - {0} > {1} rows generated"
 
+# -- info
+INFO_LOOKING_UP_COLUMN = " \t > Looking up column {0}"
+
 # -- literals
 STR_DBCOLUMN = "\t Name    : {0}{1}\n\t Contents: {2}\n\t Type    : {3}\n\t Action  : {4}"
 
@@ -88,11 +91,11 @@ class DBAction:
     Definition of actions
     """
 
-    def __init__(self, action, default=None):
+    def __init__(self, action:str, default=None):
 
-        '''an action consists of either ignoring (None), warning or issuing an error.
-           Additionally, in the first two cases, default values shall be
-           specified
+        '''an action consists of either ignoring (None), warning or issuing an error,
+           given as a string. Additionally, in the first two cases, default
+           values shall be specified
 
         '''
 
@@ -123,9 +126,10 @@ class DBAction:
         return self._default
 
 
-    def handle_action(self, name, ctype, message=''):
+    def handle_action(self, name:str, ctype:str, message=''):
         '''applies this action to a column named "name" which is defined to store values
-           of the specified type. It returns the data to be used with the correct type
+           of the specified type. It returns the data to be used with the
+           correct type
 
         '''
 
@@ -185,7 +189,7 @@ class DBExplicit:
 
     def __init__(self, data):
         '''data (of any of the basic types: date, datetime, integers, floating-point
-           numbers and strings) is defined explicitly just by providing it.
+           numbers and strings is defined explicitly just by providing it.
 
            Note that the type of data is not verified for consistency at the
            time of its creation, but later when it is about to be used
@@ -218,31 +222,37 @@ class DBCellReference:
 
     """
 
-    def __init__(self, descriptor, coloffset=0, rowoffset=0):
-        """Cells can be given either explicitly or implicitly in the descriptor:
+    def __init__(self, descriptor:str, coloffset=0, rowoffset=0):
+        """Cells can be given either explicitly or implicitly in the descriptor given as
+           a string with the format <alpha><num>:
 
               * Explicitly: cells are identified by their coords, e.g., B24
 
               * Implicitly: cells can be identified by various means:
 
-                + By the global length. Either the row or the column or both can
+                + By the *global* length. Either the row, the column or both can
                   be automatically determined such that the length of the
-                  resulting range is equal to the length given in the context of
-                  a block. This definition requires another cell to be used in
-                  the comparison, e.g., $B* should be equal to $B6 if it is
-                  given with either $B4 or $B8 and length is 3
+                  resulting range is equal to the length of the context of the
+                  block where it is processed. This definition requires another
+                  cell to be used in the comparison, e.g., $B* should be equal
+                  to $B6 if it is given with either $B4 or $B8 and length is 3
 
-                + By the range. Either the row or the column or both can be
-                  automatically determined using the range of rows and columns
-                  of the current sheet, e.g., $B. would be $B6 if the number of
-                  rows equals 6 and $.3 would be equal to $H3 if the number of
-                  columns equals 8
+                + By the range. Either the row or the column (but not both) can
+                  be directly retrieved from the spreadsheet as the first/last
+                  non-empty row/column. '.' refers to the first row/column if it
+                  appears in the first cell of the range as in $A.:$A20, and it
+                  is the last element when it appears in the second cell of the
+                  range as in $B10:$.10.
 
-                + By their content. Either the row or the column has to be
-                  explicitly given, e.g., $B[100] is the cell in column B and
-                  any row whose content is precisely equal to 100. It is also
-                  possible to give empty cells such as in $[]3 which is the cell
-                  in the third row and any column whose content is empty
+                  Obviously, cell references fully ignore whether a cell is
+                  first or last.
+
+                + By their content. Either the row or the column (but not both)
+                  is characterized by its content between square brackets, e.g.,
+                  $B[100] is the cell in the first row in column B whose content
+                  is precisely equal to 100. It is also possible to give empty
+                  cells such as in $[]3 which is the cell in the first column of
+                  the third row whose content is empty
 
            Additionally, cells can be referenced with an offset (either positive
            or negative) of columns and rows
@@ -302,8 +312,8 @@ class DBCellReference:
            overwrites the contents of self._descriptor
 
            The '.' can be used freely even in conjunction with other implicit
-           operators such as [content] and '*'. It is even possible to use the
-           dot '.' with itself as in $..
+           operators such as [content] and '*'. However, it is forbidden to use
+           the dot operator '.' with itself as in '.'
 
            If the dot appears in the column position of the descriptor of this
            instance, then it is substituted by the last column in the current
@@ -357,7 +367,7 @@ class DBCellReference:
         """
 
     
-    def _traverse_cells(self, sheet, base=None):
+    def _traverse_cells(self, sheet:pyexcel.Sheet, base=None):
         """compute the exact location of this cell in a two-step process:
 
            1. If the descriptor defines a cell in explictit form return it
@@ -486,7 +496,7 @@ class DBRange:
 
     """
 
-    def __init__(self, start, end):
+    def __init__(self, start: DBCellReference, end: DBCellReference):
         '''defines a range of cells which can be given either impliclty or explicilty.
           'start' and 'end' should be given as instances of DBCellReference
 
@@ -540,7 +550,7 @@ class DBContents:
 
     """
 
-    def __init__(self, intervals):
+    def __init__(self, intervals: list):
         '''defines a list of contents, each one can be either a content explicitly
            given, or a range of cells
 
@@ -564,7 +574,7 @@ class DBContents:
 
         return output
 
-    def __add__(self, other):
+    def __add__(self, other: list):
         '''extends this range of intervals, with another range of intervals'''
 
         self._intervals += other._intervals
@@ -729,7 +739,7 @@ class DBColumn:
         return self._data
 
 
-    def lookup(self, context, spsname, sheetname=None):
+    def lookup(self, context, spsname: str, sheetname=None):
         '''returns the contents of this column. If it consists of data explicitly given,
            then it returns it right away after casting it to the appropriate
            type; if the contents of this column consist of ranges of cells, then
@@ -737,7 +747,7 @@ class DBColumn:
 
            Columns accept ranges in various implicit formats. For
            dissambiguating them, the context of the block this column belongs to
-           is necessary.
+           is mandatory. The context has to be given as an instance of DBContext
 
            In case the sheet has to be used, if a sheetname is given, then data
            is retrieved from the specified one
@@ -776,7 +786,6 @@ class DBColumn:
 
                 # and add this data to the result
                 self._data.append(data)
-
 
             # LIST OF REGIONS
             # ---------------------------------------------------------------------
@@ -863,15 +872,17 @@ class DBModifier:
     Provides the definition of a block modifier
     """
 
-    def __init__(self, name, *args):
+    def __init__(self, name: str, *args):
         """Modifiers are distinguished with a name and qualified with a number of
-           arguments"""
+           arguments
+
+        """
 
         # copy the attributes
         self._name, self._args = name, args
 
 
-    def __eq__(self, other):
+    def __eq__(self, other: str):
         """returns whether this modifier has the name given in other"""
 
         return self._name == other
@@ -912,7 +923,7 @@ class DBContext:
 
     """
 
-    def __init__(self, modifier):
+    def __init__(self, modifier: DBModifier):
         '''Initializes this context with the given modifier which shall be given as an
         instance of DBModifier
 
@@ -948,14 +959,14 @@ class DBContext:
         return self
 
 
-    def __contains__(self, other):
+    def __contains__(self, other: DBModifier):
         """return true if and only if there is a mdoifier in this context whose name
            matches other"""
 
         return other in self._modifiers
 
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str):
         """Called to implement evaluation of self[key]. If key does not exist, an
            exception is immediately raised"""
 
@@ -964,7 +975,7 @@ class DBContext:
         return self._modifiers[self._modifiers.index(key)].get_args()
 
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value):
         """Called to implement assignment to self[key]. If key exists it is
            overwritten"""
 
@@ -1024,7 +1035,7 @@ class DBBlock:
     different columns
     """
 
-    def __init__(self, columns, context=None):
+    def __init__(self, columns: list, context=None):
         '''initializes a block as a sequence of columns. Columns shall be given as a
            list of instances of DBColumn. Modifiers affect the behaviour of the
            table and should be given within a context as an instance of DBContext
@@ -1065,6 +1076,11 @@ class DBBlock:
 
         # copy the attributes
         self._columns, self._context = columns, context
+
+        # in case no context was given, then create an empty one. To create an
+        # empty context, an empty modifier is used
+        if not self._context:
+            self._context = DBContext("")
 
         # process all columns to get a list of all primary keys
         self._keys = []
@@ -1149,7 +1165,7 @@ class DBBlock:
 
         return output                           # return the output string
 
-    def lookup(self, spsname, sheetname=None):
+    def lookup(self, spsname: str, sheetname=None):
         '''looks up the given spreadsheet and returns a list of tuples to insert in a
            sqlite3 database. If a sheetname is given, then it access that
            specified sheet; otherwisses, it uses the first one.
@@ -1176,7 +1192,7 @@ class DBBlock:
         # iterate over all columns to look up the spreadsheet
         for column in self._columns:
 
-            print(" \t > Looking up column {0}".format(column.get_name()))
+            print(INFO_LOOKING_UP_COLUMN.format(column.get_name()))
 
             # look up this specific table
             column.lookup(self._context, spsname, sheetname)
@@ -1272,10 +1288,14 @@ class DBSQLStatement:
     Provides the definition of a executable SQL statements
     """
 
-    def __init__(self, statement):
-        '''SQL statements are given as plain strings. Importantly, they are executed
-           right there when the (sequential) execution flow reaches'em. They
-           are executed wrt the database specified.
+    def __init__(self, statement: str):
+        '''SQL statements are given as plain strings.
+
+           Importantly, they are executed right there when the (sequential)
+           execution flow reaches them. They are executed wrt the database
+           specified in the sql statement, i.e., sql statements do not appear
+           within any block and therefore the corresponding databse/tables have
+           to be fully qualified
 
         '''
 
@@ -1295,8 +1315,9 @@ class DBSQLStatement:
         return self._statement
 
 
-    def exec(self, cursor):
-        '''executes the SQL statement given to this instance through the specified sqlite3 cursor.
+    def exec(self, cursor: sqlite3.Cursor):
+        '''executes the SQL statement given to this instance through the specified
+           sqlite3 cursor.
 
            In case an error happend an exception is immediately raised
 
@@ -1315,13 +1336,13 @@ class DBTable:
     Provides the definition of a database table
     """
 
-    def __init__(self, name, spreadsheet, sheetname, block):
-        '''initializes a database table with the contents of a single block (which must
-           be an instance of DBBlock). A block is a consecutive definition of
-           different columns. A DBTable is used to populate a sqlite3 database
-           with information retrieved from the given spreadsheet and sheetname
-           ---and if no sheetname is given, then from the first one found by
-           default.
+    def __init__(self, name: str,
+                 spreadsheet: str, sheetname: str, block: DBBlock):
+        '''initializes a database table with the contents of a single block. A block is
+           a consecutive definition of different columns. A DBTable is used to
+           populate a sqlite3 database with information retrieved from the given
+           spreadsheet and sheetname ---and if no sheetname is given, then from
+           the first one found by default.
 
         '''
 
@@ -1333,16 +1354,16 @@ class DBTable:
     def __str__(self):
         '''provides a human-readable description of the contents of this database'''
 
-        output = str()                         # initialize the output string
+        output = str()
         output += " Block      : {0}\n".format(self._name)
         output += " Spreadsheet: {0}\n".format(self.get_spreadsheet())
         output += " Sheet name : {0}\n\n".format(self.get_sheetname())
         output += " {0}\n\n".format(self._block)
 
-        return output                           # return the output string
+        return output
 
     def get_block(self):
-        """return the number of blocks of this table"""
+        """return the block of this table"""
 
         return self._block
 
@@ -1367,17 +1388,17 @@ class DBTable:
         '''returns the name of the spreadsheet used to read data from'''
 
         if not self._spreadsheet:
-            return "user defined"
+            return "User defined (default)"
         return self._spreadsheet
 
     def get_sheetname(self):
         '''returns the sheet name used to read data from'''
 
         if not self._sheetname:
-            return "first one (default)"
+            return "First one (default)"
         return self._sheetname
 
-    def create(self, cursor, append=False):
+    def create(self, cursor: sqlite3.Cursor, append=False):
         '''creates a sqlite3 database table with the schema of its block with the given
            name using the given sqlite3 cursor
 
@@ -1468,7 +1489,8 @@ class DBTable:
                 cursor.execute(cmdline)
 
 
-    def insert(self, cursor, spsname, sheetname=None, override=False):
+    def insert(self, cursor: sqlite3.Cursor,
+               spsname: str, sheetname=None, override=False):
         '''insert the data of this table in a sqlite3 database through the given sqlite3
            cursor. Data is retrieved from the given spreadsheet and sheetname
            which are computed as follows:
@@ -1527,14 +1549,16 @@ class DBDatabase:
 
     """
 
-    def __init__(self, expressions):
-        '''initializes a database with the given tables which shall be instances of
-           DBTable and SQL statements, given as instances of DBSQLStatement
+    def __init__(self, expressions: list):
+        '''initializes a database with a list of expressions which shall be instances of
+           DBTable and/or SQL statements, given as instances of DBSQLStatement
 
         '''
 
         self._expressions = expressions
-        self._current = 0               # used to iterate over expressions
+
+        # init the counter for iterating over expressions
+        self._current = 0
 
         # other members are now intialized empty
         self._dbname = None
@@ -1587,13 +1611,13 @@ class DBDatabase:
     def __str__(self):
         '''provides a human-readable description of the contents of this database'''
 
-        output = str()                         # initialize the output string
+        output = str()
         for expression in self._expressions:
-            output += "{0}".format(expression) # format each expression
+            output += "{0}".format(expression)
 
-        return output                          # and return the string
+        return output
 
-    def create(self, dbname, append=False):
+    def create(self, dbname: str, append=False):
         '''creates a sqlite3 database named 'databasename' with the schema of all tables
            in this instance
 
@@ -1623,7 +1647,9 @@ class DBDatabase:
         self._conn.commit()                    # commit all changes
         self._conn.close()                     # close the database
 
-    def insert(self, dbname, spsname, sheetname=None, override=False, append=False):
+    def insert(self, dbname: str,
+               spsname: str, sheetname=None,
+               override=False):
         '''inserts data from the given spreadsheet into the sqlite3 database named
            'databasename' according to the schema of all tables in this
            instance, and executes the specified SQL statements. Both insertions
@@ -1641,10 +1667,6 @@ class DBDatabase:
            spreadsheet is used, i.e., the configuration file has precedence
            unless override is True; if none is given anywhere, the first sheet
            found in the spreadsheet is used by default.
-
-           If append is given, then all data extracted is added to the specified
-           database tables. Otherwise, an error is issued in case a database is
-           found with the same name
 
         '''
 
@@ -1678,5 +1700,4 @@ class DBDatabase:
 # Local Variables:
 # mode:python
 # fill-column:80
-
 # End:
