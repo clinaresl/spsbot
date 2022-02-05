@@ -182,7 +182,8 @@ class DBParser:
     #       respectively of the spreadsheet. '.' refers to the first row/column
     #       if it appears in the first cell of the range as in $A.:$A20, and it
     #       is the last element when appears in the second cell of the range as
-    #       in $B10:$.10
+    #       in $B10:$.10. In case it is NOT given in a range, then it is
+    #       interpreted as the first row/column
     #
     #    2. Defined by the content: either the row or the column is
     #       characterized by its content between square brackets, e.g., $B[20]
@@ -192,10 +193,13 @@ class DBParser:
     # Note that it is forbidden:
     #
     #    1. To use the dot '.' operator with the content operator '[]' in the
-    #       description of the same cell
-    #
-    #    2. To use the dot both for the row and the column in the same cell,
-    #       i.e., $..
+    #       description of the same cell. Note however that it is allowed to use
+    #       the dot with itself as in $.. If this is given as the first cell of
+    #       a range, then it is automatically substituted with the coordinates
+    #       of the upper-left corner of the bounding rectangle where data is
+    #       shown; if it is given as the second cell reference of a range then
+    #       it is substituted with the lower-right corner of the area used to
+    #       display data.
     def t_CELL(self, t):
         r'\$(\.|[a-zA-Z]+)(\.|\d+)|\$(\.|[a-zA-Z]+)\[[^\]]*\]|\$\[[^\]]*\](\.|\d+)'
 

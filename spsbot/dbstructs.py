@@ -237,12 +237,15 @@ class DBCellReference:
                   cell to be used in the comparison, e.g., $B* should be equal
                   to $B6 if it is given with either $B4 or $B8 and length is 3
 
-                + By the range. Either the row or the column (but not both) can
-                  be directly retrieved from the spreadsheet as the first/last
-                  non-empty row/column. '.' refers to the first row/column if it
-                  appears in the first cell of the range as in $A.:$A20, and it
-                  is the last element when it appears in the second cell of the
-                  range as in $B10:$.10.
+                + By the range. Either the first/last row or the column (but not
+                  both) can be directly retrieved from the spreadsheet. '.'
+                  refers to the first row/column if it appears in the first cell
+                  of the range as in $A.:$A20, and it is the last element when
+                  it appears in the second cell of the range as in $B10:$.10.
+                  Note that the first/last row/column refers to the first
+                  non-empty cell in the entire spreadsheet, i.e, to one of the
+                  coordinates of the bounding rectangle where data is shown in
+                  the spreadsheet.
 
                   Obviously, cell references fully ignore whether a cell is
                   first or last.
@@ -306,19 +309,20 @@ class DBCellReference:
         return output
 
 
-    def _do_range(self, context):
+    def _do_range(self, context, base: str):
         """substitutes the '.' symbol in the description of this cell using the range
            values given in the context. This is a destructive function which
            overwrites the contents of self._descriptor
 
-           The '.' can be used freely even in conjunction with other implicit
-           operators such as [content] and '*'. However, it is forbidden to use
-           the dot operator '.' with itself as in '.'
+           If no base is given, then the *first* cell is returned which is
+           either the min_column or the min_row stored in the context. However,
+           if a base is given, then the first cell *after* it has to be returned
+           and the only possibility here is to return either max_column or
+           max_row
 
-           If the dot appears in the column position of the descriptor of this
-           instance, then it is substituted by the last column in the current
-           range; likewise, if it appears in the row position, then it is
-           substituted with the last row in the current range
+           Note that the dot can be combined with itself in a cell reference as
+           in $.., which is then substituted with the lower-right corner of the
+           spreadsheet
 
            This operator enables reusability of the same db description files
            even if the contents of the spreadsheet change
@@ -330,16 +334,24 @@ class DBCellReference:
         if self._descriptor[0] == '.':
 
             # In the following, one is substracted from the value of the column
-            # as retrieved from the context, because structs.get_getcolumnname
+            # retrieved from the context, because structs.get_getcolumnname
             # numbers columns from zero so that 'A' is 0 but pyexcel would give
             # this column the value 1
-            self._descriptor = structs.get_columnname(context["max_column"][0]-1) + \
-                self._descriptor[1:]
+            if not base:
+                self._descriptor = structs.get_columnname(context["min_column"][0]-1) + \
+                    self._descriptor[1:]
+            else:
+                self._descriptor = structs.get_columnname(context["max_column"][0]-1) + \
+                    self._descriptor[1:]
 
         # does the dot appear in the row? Note that we just simply verify that
         # the last character is the dot
         if self._descriptor[-1] == '.':
-            self._descriptor = self._descriptor[:-1] + str(context["max_row"][0])
+
+            if not base:
+                self._descriptor = self._descriptor[:-1] + str(context["min_row"][0])
+            else:
+                self._descriptor = self._descriptor[:-1] + str(context["max_row"][0])
 
 
     def _do_length(self, ref, context):
@@ -366,7 +378,6 @@ class DBCellReference:
 
         """
 
-    
     def _traverse_cells(self, sheet:pyexcel.Sheet, base=None):
         """compute the exact location of this cell in a two-step process:
 
@@ -430,7 +441,7 @@ class DBCellReference:
             raise ValueError(ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION.format(self._descriptor))
 
         # verify now that this column and row are within the range of the
-        # spreadsheet. If not immediately raise
+        # spreadsheet. If not immediately raise an error
         current = column + str(row)
         if structs.get_columnindex(column) >= sheet.column_range().stop:
             raise IndexError(ERROR_COLUMN_INDEX.format(column, self._descriptor))
@@ -471,9 +482,16 @@ class DBCellReference:
 
         """
 
-        # update the descriptor of this instance if the dot operator '.' was
-        # used
-        self._do_range(context)
+        # first, update the descriptor of this instance if the dot operator '.'
+        # was used. The result of _do_range is an explicit representation of
+        # this cell which is directly returned by _traverse_cells
+        self._do_range(context, base)
+
+        # Now, in case the [] operator has been used then use _traverse_cells to
+        # obtain the right location of this cell. Otherwise, an explicit
+        # representation of this cell should be available which is directly
+        # returned by _traverse_cells. In passing, apply the offset of this
+        # instance to the resulting cell
         self._cell = structs.add_rows(structs.add_columns(self._traverse_cells(sheet, base),
                                                           self._coloffset),
                                       self._rowoffset)
@@ -529,7 +547,12 @@ class DBRange:
         """
 
         # first, compute the exact locations of the start and end cells of this
-        # range
+        # range. The start cell is computed as the first cell satisfying the
+        # definition of its own cell reference (i.e., if "B." is given then it
+        # is the first column with data); whereas the end cell has to be
+        # necessarily after the start cell, e.g. if "B[114]" is given and start
+        # is B6, then it is the first cell in the first row of the second column
+        # after the sixth column whose content equals 114
         start = self._start.execute(context, sheet)
         end = self._end.execute(context, sheet, start)
 
@@ -959,10 +982,15 @@ class DBContext:
         return self
 
 
-    def __contains__(self, other: DBModifier):
-        """return true if and only if there is a mdoifier in this context whose name
-           matches other"""
+    def __contains__(self, other):
+        """return true if and only if there is a modifier in this context whose name
+           matches other
 
+           other can be given either as an instance of DBModifier or as a string
+        """
+
+        # otherwise directly compare them and return whether it has been found
+        # or not
         return other in self._modifiers
 
 
@@ -1172,6 +1200,41 @@ class DBBlock:
 
         '''
 
+        def _get_min_row(sheet: pyexcel.Sheet):
+            """return the first non empty row in the range of columns
+               [1,sheet.column_range().stop]
+
+            """
+
+            # for all rows
+            for irow in range(1, 1+sheet.row_range().stop):
+
+                # for all columns
+                for icolumn in range(0, sheet.column_range().stop):
+
+                    # in case this is a non-empty cell immediately return the
+                    # row index
+                    if sheet[structs.get_columnname(icolumn) + str(irow)]:
+                        return irow
+
+        def _get_min_column(sheet: pyexcel.Sheet):
+            """return the first non empty colum in the range of columns
+               [1,sheet.column_range().stop]
+
+            """
+
+            # for all columns
+            for icolumn in range(1, 1+sheet.column_range().stop):
+
+                # for all rows
+                for irow in range(1, 1+sheet.row_range().stop):
+
+                    # in case this is a non-empty cell immediately return the
+                    # row index
+                    if sheet[structs.get_columnname(icolumn-1) + str(irow)]:
+                        return icolumn
+
+
         # --- initialization
         maxlen = 0                      # length of the longest column
 
@@ -1185,8 +1248,13 @@ class DBBlock:
         # ensure that the context of this block contains all necessary
         # information for dissambiguating some implicit formats of ranges that
         # might be given in its columns
-        if self._context:
+        if "min_column" not in self._context:
+            self._context["min_column"] = _get_min_column(sheet)
+        if "min_row" not in self._context:
+            self._context["min_row"] = _get_min_row(sheet)
+        if "max_column" not in self._context:
             self._context["max_column"] = sheet.column_range().stop
+        if "max_row" not in self._context:
             self._context["max_row"] = sheet.row_range().stop
 
         # iterate over all columns to look up the spreadsheet

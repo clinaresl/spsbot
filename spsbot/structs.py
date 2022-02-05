@@ -56,7 +56,7 @@ def get_columnrow(cellname):
 # get_columnindex
 #
 # return a unique integer identifier for the given column which is
-# represented as a string. For this, characters are translate into
+# represented as a string. For this, characters are translated into
 # numbers and the whole sequence is interpreted as a number in base 26
 # -----------------------------------------------------------------------------
 def get_columnindex(columnname):
@@ -105,7 +105,7 @@ def get_index(cellname, startrow, nbrows):
 
     # apply the typical formula - note that this index starts
     # assigning values from column 'A'
-    return get_columnindex(column) * nbrows +(row - startrow)
+    return get_columnindex(column) * nbrows + (row - startrow)
 
 
 # -----------------------------------------------------------------------------
