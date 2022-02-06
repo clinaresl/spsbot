@@ -28,19 +28,19 @@ import ply.lex as lex
 import ply.yacc as yacc
 
 from . import spsstructs
-
+from . import utils
 
 # globals
 # -----------------------------------------------------------------------------
+LOGGER = utils.LOGGER
 
 # -- errors
-
 ERROR_ILLEGAL_CHAR = "Illegal character '%s'"
-ERROR_CONFLICT_LITERALS = " Fatal Error - Conflicting definitions for literal '{0}'"
-ERROR_CONFLICT_QUERIES = " Fatal Error - Conflicting definitions for query '{0}'"
-ERROR_UNKNOWN_LITERAL = " Fatal Error - Unknown literal '{0}'"
-ERROR_UNKNOWN_QUERY = " Fatal Error - Unknown query '{0}'"
-ERROR_SYNTAX_ERROR = " Syntax error in line {0} near '{1}': unexpected token {2} found"
+ERROR_CONFLICT_LITERALS = "Conflicting definitions for literal '{0}'"
+ERROR_CONFLICT_QUERIES = "Conflicting definitions for query '{0}'"
+ERROR_UNKNOWN_LITERAL = "Unknown literal '{0}'"
+ERROR_UNKNOWN_QUERY = "Unknown query '{0}'"
+ERROR_SYNTAX_ERROR = "Syntax error in line {0} near '{1}': unexpected token {2} found"
 
 # classes
 # -----------------------------------------------------------------------------
@@ -228,7 +228,7 @@ class SPSParser:
     # Error handling rule
     def t_error(self, t):
 
-        print(ERROR_ILLEGAL_CHAR % t.value[0])
+        LOGGER.error(ERROR_ILLEGAL_CHAR % t.value[0])
         t.lexer.skip(1)
 
     # grammar rules
@@ -285,7 +285,7 @@ class SPSParser:
         # first, make sure this literal was not previously defined
         if p[2] in self._literal_table:
 
-            print(ERROR_CONFLICT_LITERALS.format(p[2]))
+            LOGGER.error(ERROR_CONFLICT_LITERALS.format(p[2]))
 
         # otherwise, store it in way or another depending upon the type of
         # literal
@@ -312,7 +312,7 @@ class SPSParser:
         # does not exist
         if p[3] in self._query_table:
 
-            print(ERROR_CONFLICT_QUERIES.format(p[3]))
+            LOGGER.error(ERROR_CONFLICT_QUERIES.format(p[3]))
             sys.exit(0)
 
         self._query_table[p[2]] = p[3]
@@ -532,7 +532,7 @@ class SPSParser:
             if p[1] == 'literal':
 
                 if p[3] not in self._literal_table:
-                    print(ERROR_UNKNOWN_LITERAL.format(p[3]))
+                    LOGGER.error(ERROR_UNKNOWN_LITERAL.format(p[3]))
                     sys.exit(0)
 
                 p[0] = ('Literal', p[3], self._literal_table[p[3]],
@@ -540,7 +540,7 @@ class SPSParser:
             else:
 
                 if p[3] not in self._query_table:
-                    print(ERROR_UNKNOWN_QUERY.format(p[3]))
+                    LOGGER.error(ERROR_UNKNOWN_QUERY.format(p[3]))
                     sys.exit(0)
 
                 # note that queries are always of type 'text'. However, its type
@@ -563,8 +563,7 @@ class SPSParser:
     # -----------------------------------------------------------------------------
     # Error rule for syntax errors
     def p_error(self, p):
-        print(ERROR_SYNTAX_ERROR.format(p.lineno, p.value, p.type))
-        print()
+        LOGGER.error(ERROR_SYNTAX_ERROR.format(p.lineno, p.value, p.type))
         sys.exit()
 
 

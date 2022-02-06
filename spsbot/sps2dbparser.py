@@ -25,13 +25,17 @@ import sys                      # system accessing
 from . import dbparser
 from . import preprocessor
 from . import version
+from . import utils
 
 # globals
 # -----------------------------------------------------------------------------
+LOGGER = utils.LOGGER
+
+# -- info
+INFO_CONF_GENERATED = "Configuration file '{0}' generated ..."
 
 # -- errors
-
-ERROR_NO_SPEC_FILE = " no database specification file! Make sure to invoke --parse-db/--show-templates/--generate-conf *after* --configuration"
+ERROR_NO_SPEC_FILE = "No database specification file! Make sure to invoke --parse-db/--show-templates/--generate-conf *after* --configuration"
 
 # -----------------------------------------------------------------------------
 # ShowDatabaseSpec
@@ -133,7 +137,7 @@ class GenerateConfFile(argparse.Action):
         with open(values, 'w') as stream:
             stream.write(pragma.get_text())
 
-        print(" Configuration file '{0}' generated ...".format(values))
+        LOGGER.info(INFO_CONF_GENERATED.format(values))
 
         # and finally exit
         sys.exit(0)

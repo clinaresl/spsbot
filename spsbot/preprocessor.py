@@ -22,9 +22,11 @@ from string import Template
 
 import re
 
+from . import utils
 
 # globals
 # -----------------------------------------------------------------------------
+LOGGER = utils.LOGGER
 
 # --regexp
 REGEXP_TEMPLATE = r"template\s+[a-zA-Z0-9_]+\s*\(\s*[^\n\r\t,)]*(,\s*[^\n\r\t,)]+)*\s*\)\s*\{[^\}]+\}"
@@ -38,11 +40,12 @@ REGEXP_ARGS = r"\(\s*(?P<args>[^\n\r\t,)]*(,\s*[^\n\r\t,)]+\s*)*)\s*\)"
 # --errors
 TEMPLATE_SYNTAX_ERROR = "Syntax error in template {0}"
 ERROR_MISMATCHED_ARGS = "Mismatched number of arguments of template {0}: {1}"
+ERROR_CONF_FILE_NOT_FOUND = "Either the configuration file '{0}' does not exist or it is not accessible"
 
 # functions
 # -----------------------------------------------------------------------------
 
-def subst_template(text, itemplate):
+def subst_template(text: str, itemplate: str):
     """returns the result of substituting all references to the given template in
        the specified text
 
@@ -82,7 +85,7 @@ class PRGTemplate:
     Provides the definition of text templates and means for executing them
     """
 
-    def __init__(self, template):
+    def __init__(self, template: str):
         """a template is initialized with a textual description of it"""
 
         # copy the definition of the template
@@ -133,6 +136,7 @@ class PRGTemplate:
             self._args = ["__" + iarg + "__" for iarg in self._args]
 
         else:
+            LOGGER.error(TEMPLATE_SYNTAX_ERROR.format(self._template))
             raise ValueError(TEMPLATE_SYNTAX_ERROR.format(self._template))
 
 
@@ -166,6 +170,7 @@ class PRGTemplate:
         # first things first, verify that the number of arguments given match
         # the number of arguments of this template
         if len(args) != len(self._args):
+            LOGGER.error(ERROR_MISMATCHED_ARGS.format(self._name, args))
             raise ValueError(ERROR_MISMATCHED_ARGS.format(self._name, args))
 
         # create a dictionary to make the assignment of all arguments of this
@@ -191,7 +196,7 @@ class PRGProcessor:
 
     """
 
-    def __init__(self, configfile):
+    def __init__(self, configfile: str):
         """a preprocessor is initialized just with a configuration file whose contents
            are processed"""
 
@@ -199,8 +204,11 @@ class PRGProcessor:
         self._configfile = configfile
 
         # open the file and retrieve all contents
-        with open(self._configfile, encoding="utf-8") as fstream:
-            self._contents = fstream.read()
+        try:
+            with open(self._configfile, encoding="utf-8") as fstream:
+                self._contents = fstream.read()
+        except:
+            LOGGER.error(ERROR_CONF_FILE_NOT_FOUND.format(self._configfile))
 
         # initialize the list of templates found in this configuration file and
         # also the count of templates when using the iterator provided by this

@@ -31,12 +31,14 @@ import sys                              # exit
 import pyexcel
 
 from . import structs
+from . import utils
 
 # globals
 # -----------------------------------------------------------------------------
+LOGGER = utils.LOGGER
 
 # -- errors
-ERROR = " Error - {0}"
+ERROR = "Error - {0}"
 ERROR_INVALID_CELL_SPECIFICATION = "The cell '{0}' is not a legal expression, neither implicit nor explicitly"
 ERROR_INVALID_EXPLICIT_CELL_SPECIFICATION = "The cell '{0}' is not a legal explicit cell"
 ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION = "The cell '{0}' is not a legal implicit cell"
@@ -60,20 +62,20 @@ ERROR_BLOCK_UNSPECIFIED_TYPE = """
 The block
 
 {0} contains columns with unspecified types"""
-ERROR_TABLE_EXISTS = " Table '{0}' already exists"
-ERROR_NO_SPREADSHEET = " No spreadsheet has been given"
-ERROR_FILE_EXISTS = " The file '{0}' already exists!"
+ERROR_TABLE_EXISTS = "Table '{0}' already exists"
+ERROR_NO_SPREADSHEET = "No spreadsheet has been given"
+ERROR_FILE_EXISTS = "The file '{0}' already exists!"
 
 # -- warnings
-WARNING = " Warning - {0}"
-WARNING_DUPLICATED_ROW = " Warning - Duplicated row: {0}"
-WARNING_NOT_EQUAL = " Warning - {0} != {1} rows generated"
-WARNING_EQUAL = " Warning - {0} = {1} rows generated"
-WARNING_LESS = " Warning - {0} < {1} rows generated"
-WARNING_GREATER = " Warning - {0} > {1} rows generated"
+WARNING = "{0}"
+WARNING_DUPLICATED_ROW = "Duplicated row: {0}"
+WARNING_NOT_EQUAL = "{0} != {1} rows generated"
+WARNING_EQUAL = "{0} = {1} rows generated"
+WARNING_LESS = "{0} < {1} rows generated"
+WARNING_GREATER = "{0} > {1} rows generated"
 
 # -- info
-INFO_LOOKING_UP_COLUMN = " \t > Looking up column {0}"
+INFO_LOOKING_UP_COLUMN = "\t > Looking up column {0}"
 
 # -- literals
 STR_DBCOLUMN = "\t Name    : {0}{1}\n\t Contents: {2}\n\t Type    : {3}\n\t Action  : {4}"
@@ -137,13 +139,14 @@ class DBAction:
         if self._action == 'Error':                             # in case of error
 
             # raise an error
+            LOGGER.error(message)
             raise RuntimeError(message)
 
         if self._action == 'Warning':                           # in case of warning
 
             # show a warning message and use the default value defined for this
             # column
-            print(WARNING.format(message))
+            LOGGER.warning(WARNING.format(message))
             data = self._default
 
         # if it is neither an error nor a warning, silently copy the default
@@ -166,11 +169,13 @@ class DBAction:
                 elif ctype in ['text', 'datetime', 'date']:
                     data = str(data)
                 else:
+                    LOGGER.error(ERROR_UNKNOWN_TYPE.format(data, name, ctype))
                     raise TypeError(ERROR_UNKNOWN_TYPE.format(data, name, ctype))
 
             except:
 
                 # if it was not possible then raise an error
+                LOGGER.error(ERROR_CAST_COLUMN.format(data, name, ctype))
                 raise TypeError(ERROR_CAST_COLUMN.format(data, name, ctype))
 
         # finally, return the default value as computed here
@@ -419,6 +424,7 @@ class DBCellReference:
         regexp1 = r'\[(?P<column1>.*)\](?P<row1>\d+)'
         match = re.match(regexp0 + '|' + regexp1, self._descriptor)
         if not match:
+            LOGGER.error(ERROR_INVALID_CELL_SPECIFICATION.format(self._descriptor))
             raise ValueError(ERROR_INVALID_CELL_SPECIFICATION.format(self._descriptor))
 
         # process the base which should be given explicitly in the form
@@ -446,14 +452,17 @@ class DBCellReference:
         else:
 
             # something went deeply wrong here!
+            LOGGER.error(ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION.format(self._descriptor))
             raise ValueError(ERROR_INVALID_IMPLICIT_CELL_SPECIFICATION.format(self._descriptor))
 
         # verify now that this column and row are within the range of the
         # spreadsheet. If not immediately raise an error
         current = column + str(row)
         if structs.get_columnindex(column) >= sheet.column_range().stop:
+            LOGGER.error(ERROR_COLUMN_INDEX.format(column, self._descriptor))
             raise IndexError(ERROR_COLUMN_INDEX.format(column, self._descriptor))
         if int(row) > sheet.row_range().stop:
+            LOGGER.error(ERROR_ROW_INDEX.format(row, self._descriptor))
             raise IndexError(ERROR_ROW_INDEX.format(row, self._descriptor))
 
         # so just locate at the given row and column and proceed applying the
@@ -465,8 +474,10 @@ class DBCellReference:
             current = structs.add_columns(structs.add_rows(current, delta[1]), delta[0])
             (column, row) = structs.get_columnrow(current)
             if structs.get_columnindex(column) >= sheet.column_range().stop:
+                LOGGER.error(ERROR_COLUMN_INDEX.format(column, self._descriptor))
                 raise IndexError(ERROR_COLUMN_INDEX.format(column, self._descriptor))
             if row > sheet.row_range().stop:
+                LOGGER.error(ERROR_ROW_INDEX.format(row, self._descriptor))
                 raise IndexError(ERROR_ROW_INDEX.format(row, self._descriptor))
 
         # and return the cell that matches the contents given in the cell beyond
@@ -763,7 +774,7 @@ class DBColumn:
 
         elif len(self._data) != length:
 
-            print(ERROR_EXTENT.format(self._name, len(self._data), length))
+            LOGGER.error(ERROR_EXTENT.format(self._name, len(self._data), length))
             sys.exit(0)
 
         # and return the new container
@@ -886,7 +897,7 @@ class DBColumn:
                     self._data.append(data)
 
             else:
-
+                LOGGER.error(ERROR_CONTENT_UNKNOWN_TYPE.format(content))
                 raise TypeError(ERROR_CONTENT_UNKNOWN_TYPE.format(content))
 
         # and return the result
@@ -1007,6 +1018,7 @@ class DBContext:
            exception is immediately raised"""
 
         if key not in self._modifiers:
+            LOGGER.error(ERROR_KEY_NOT_FOUND_IN_CONTEXT.format(key))
             raise KeyError(ERROR_KEY_NOT_FOUND_IN_CONTEXT.format(key))
         return self._modifiers[self._modifiers.index(key)].get_args()
 
@@ -1268,7 +1280,7 @@ class DBBlock:
         # iterate over all columns to look up the spreadsheet
         for column in self._columns:
 
-            print(INFO_LOOKING_UP_COLUMN.format(column.get_name()))
+            LOGGER.info(INFO_LOOKING_UP_COLUMN.format(column.get_name()))
 
             # look up this specific table
             column.lookup(self._context, spsname, sheetname)
@@ -1309,7 +1321,7 @@ class DBBlock:
 
                     # if check-duplicates was requested
                     if self._context and 'check_duplicates' in self._context:
-                        print(WARNING_DUPLICATED_ROW.format(row))
+                        LOGGER.warning(WARNING_DUPLICATED_ROW.format(row))
                     if self._context and 'enforce_unique' in self._context:
                         continue
 
@@ -1323,22 +1335,22 @@ class DBBlock:
                 if imodifier == 'geq':
                     arg = imodifier.get_args()[0]
                     if arg > nbrows:
-                        print(WARNING_LESS.format(nbrows, arg))
+                        LOGGER.warning(WARNING_LESS.format(nbrows, arg))
 
                 if imodifier == 'leq':
                     arg = imodifier.get_args()[0]
                     if arg < nbrows:
-                        print(WARNING_GREATER.format(nbrows, arg))
+                        LOGGER.warning(WARNING_GREATER.format(nbrows, arg))
 
                 if imodifier == 'eq':
                     arg = imodifier.get_args()[0]
                     if arg != nbrows:
-                        print(WARNING_NOT_EQUAL.format(nbrows, arg))
+                        LOGGER.warning(WARNING_NOT_EQUAL.format(nbrows, arg))
 
                 if imodifier == 'neq':
                     arg = imodifier.get_args()[0]
                     if arg == nbrows:
-                        print(WARNING_EQUAL.format(nbrows, arg))
+                        LOGGER.warning(WARNING_EQUAL.format(nbrows, arg))
 
         # and return all data retrieved from the spreadsheet in the form of a
         # list of tuples, ready to be inserted into the database
@@ -1492,6 +1504,7 @@ class DBTable:
             # otherwise, it is not an error, and there is no need to create it
             # as it already exists
             if not append:
+                LOGGER.error(ERROR_TABLE_EXISTS.format(self._name))
                 raise ValueError(ERROR_TABLE_EXISTS.format(self._name))
 
         else:
@@ -1602,7 +1615,7 @@ class DBTable:
 
         # it might happen here that no spreadsheet has been found,
         if not spsname:
-
+            LOGGER.error(ERROR_NO_SPREADSHEET)
             raise ValueError(ERROR_NO_SPREADSHEET)
 
         # retrieve now data from the spreadsheet (and/or the given sheetname)
@@ -1705,6 +1718,7 @@ class DBDatabase:
 
         # make sure no file exists with the same name
         if os.access(dbname, os.F_OK):
+            LOGGER.error(ERROR_FILE_EXISTS.format(dbname))
             raise ValueError(ERROR_FILE_EXISTS.format(dbname))
 
         # create a connection to the database
@@ -1758,14 +1772,14 @@ class DBDatabase:
             if isinstance(expression, DBTable):
 
                 # insert data into this table as commanded
-                print(" * Block {0}".format(expression.get_name()))
+                LOGGER.info("* Block {0}".format(expression.get_name()))
                 expression.insert(self._cursor, spsname, sheetname, override)
 
             # if and only if this is a SQL statement
             if isinstance(expression, DBSQLStatement):
 
                 # then execute it within the context of this database
-                print(" * SQL statement {0}".format(expression.get_statement()))
+                LOGGER.info("* SQL statement {0}".format(expression.get_statement()))
                 expression.exec(self._cursor)
 
         # close the database

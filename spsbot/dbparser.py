@@ -27,18 +27,20 @@ import ply.yacc as yacc
 
 from . import structs
 from . import dbstructs
+from . import utils
 
 # globals
 # -----------------------------------------------------------------------------
+LOGGER = utils.LOGGER
 
 # -- errors
 ERROR_INVALID_CHAR = "Illegal character '{0}'"
 ERROR_SYNTAX_ERROR = "Syntax error in line {0} near '{1}': unexpected token {2} found"
 
 # -- warning
-WARNING_FLOATING_MODIFIER = "WARNING: Modifier '{0}' is qualified with a floating-point number '{1}'. It is automatically casted to an integer"
-WARNING_FLOATING_COLUMN_OFFSET = "WARNING: Column offset '{0}' given as a floating-point number in '{1}'. It is automatically casted to an integer"
-WARNING_FLOATING_ROW_OFFSET = "WARNING: Row offset '{0}' given as a floating-point number in '{1}'. It is automatically casted to an integer"
+WARNING_FLOATING_MODIFIER = "Modifier '{0}' is qualified with a floating-point number '{1}'. It is automatically casted to an integer"
+WARNING_FLOATING_COLUMN_OFFSET = "Column offset '{0}' given as a floating-point number in '{1}'. It is automatically casted to an integer"
+WARNING_FLOATING_ROW_OFFSET = "Row offset '{0}' given as a floating-point number in '{1}'. It is automatically casted to an integer"
 
 
 # classes
@@ -221,7 +223,7 @@ class DBParser:
     # Error handling rule
     def t_error(self, t):
 
-        print(ERROR_INVALID_CHAR.format(t.value[0]))
+        LOGGER.error(ERROR_INVALID_CHAR.format(t.value[0]))
         t.lexer.skip(1)
 
     # grammar rules
@@ -322,7 +324,7 @@ class DBParser:
             p[0] = dbstructs.DBModifier(p[1])
         else:
             if isinstance(p[2], float):
-                print(WARNING_FLOATING_MODIFIER.format(p[1], p[2]))
+                LOGGER.warning(WARNING_FLOATING_MODIFIER.format(p[1], p[2]))
             p[0] = dbstructs.DBModifier(p[1], p[2])
 
     def p_columns(self, p):
@@ -472,9 +474,9 @@ class DBParser:
             # check if the offset was given using floating-point numbers. If so,
             # immediately issue a warning
             if isinstance(p[4], float):
-                print(WARNING_FLOATING_COLUMN_OFFSET.format(p[4], p[1]))
+                LOGGER.warning(WARNING_FLOATING_COLUMN_OFFSET.format(p[4], p[1]))
             if isinstance(p[6], float):
-                print(WARNING_FLOATING_ROW_OFFSET.format(p[4], p[1]))
+                LOGGER.warning(WARNING_FLOATING_ROW_OFFSET.format(p[4], p[1]))
 
             p[0] = dbstructs.DBCellReference(p[1][1:], int(p[4]), int(p[6]))
 
@@ -534,8 +536,7 @@ class DBParser:
     # -----------------------------------------------------------------------------
     # Error rule for syntax errors
     def p_error(self, p):
-        print(ERROR_SYNTAX_ERROR.format(p.lineno, p.value, p.type))
-        print()
+        LOGGER.error(ERROR_SYNTAX_ERROR.format(p.lineno, p.value, p.type))
         sys.exit()
 
 

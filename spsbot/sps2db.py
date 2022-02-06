@@ -21,6 +21,19 @@ reads data from a spreadsheet and writes it into a sqlite3 database
 from . import preprocessor      # preprocessor of configuration files
 from . import sps2dbparser      # command-line parser
 from . import dbparser          # database parser
+from . import utils             # logging services
+
+# globals
+# -----------------------------------------------------------------------------
+
+# default logger
+LOGGER = utils.LOGGER
+
+# info messages
+INFO_PREPROCESSING = "Preprocessing ..."
+INFO_PARSING = "Parsing ..."
+INFO_CREATING_DB = "Creating the database ..."
+INFO_INSERTING_DATA = "Inserting data into the database ..."
 
 # main
 #
@@ -35,20 +48,20 @@ def main():
     args = sps2dbparser.Sps2DBParser().parse_args()
 
     # preprocess the configuration file
-    print(" Preprocessing ...")
+    LOGGER.info(INFO_PREPROCESSING)
     pragma = preprocessor.PRGProcessor(args.configuration)
     pragma.subst_templates()
 
     # create a database session and parse the output of the preprocessor
-    print(" Parsing ...")
+    LOGGER.info(INFO_PARSING)
     session = dbparser.VerbatimDBParser()
     database = session.run(pragma.get_text())
 
     # now, create the sqlite3 database and writes data into it
-    print(" Creating the database ...")
+    LOGGER.info(INFO_CREATING_DB)
     database.create(args.db, args.append)
 
-    print(" Inserting data into the database ...")
+    LOGGER.info(INFO_INSERTING_DATA)
     database.insert(args.db, args.spreadsheet, args.sheetname, args.override)
 
 

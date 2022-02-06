@@ -31,9 +31,11 @@ import pyexcel                  # reading/writing to various formats of spreadsh
 import xlsxwriter               # writing to xlsx files
 
 from . import structs
+from . import utils
 
 # globals
 # -----------------------------------------------------------------------------
+LOGGER = utils.LOGGER
 
 # -- errors
 ERROR_WRONG_DATE = "Incorrect date expression!"
@@ -45,9 +47,11 @@ ERROR_DATETIME_FORMULA = "It is not possible to cast a formula into a datetime"
 ERROR_DATETIME_UNKNOWN = "Unknown type to be casted into a datetime"
 ERROR_DATETIME_FORMULA = "It is not possible to cast a formula into a datetime"
 
+ERROR_KEY_NOT_FOUND = "Key not found"
+
 ERROR_UNKNOWN_TYPE = "Unknown target type '{0}'"
 
-ERROR_UNKNOWN_CELL_TYPE = " Unknown cell type: {0}"
+ERROR_UNKNOWN_CELL_TYPE = "Unknown cell type: {0}"
 
 ERROR_DESCRIPTOR_NOT_FOUND = "The descriptor {0} was not found in the context {1}"
 
@@ -65,7 +69,7 @@ ERROR_NO_SPREADSHEET = "No spreadsheet was given to store the results of executi
 ERROR_DUP_NAME = "The file '{0}' already contains a sheet named '{1}'"
 
 # -- literals
-LITERAL_CREATING_SPREADSHEET = " Creating '{0}:{1}' ..."
+LITERAL_CREATING_SPREADSHEET = "Creating '{0}:{1}' ..."
 
 # functions
 # -----------------------------------------------------------------------------
@@ -154,6 +158,7 @@ def string_to_date(value):
         return datetime.date(int(match.groups()[2]), int(match.groups()[1]), int(match.groups()[0]))
 
     # otherwise, raise an exception as this date could not be parsed
+    LOGGER.error(ERROR_WRONG_DATE)
     raise TypeError(ERROR_WRONG_DATE)
 
 
@@ -221,6 +226,7 @@ def cast_value(value, ctype):
         # imposible for formulas and it might be problematic for many
         # different strings
         if isinstance(value, str) and value[0]=='=':
+            LOGGER.error(ERROR_FORMULA_INTEGER)
             raise TypeError(ERROR_FORMULA_INTEGER)
         return int(value)
 
@@ -235,6 +241,7 @@ def cast_value(value, ctype):
             return float(value.toordinal())
 
         if isinstance(value, str) and value[0] == '=':
+            LOGGER.error(ERROR_FORMULA_REAL)
             raise TypeError(ERROR_FORMULA_REAL)
         return float(value)
 
@@ -259,6 +266,7 @@ def cast_value(value, ctype):
 
         # in any other case raise an error, as this type is not known for
         # casting into a formula
+        LOGGER.error(ERROR_FORMULA_UNKNOWN)
         raise TypeError(ERROR_FORMULA_UNKNOWN)
 
     # -- datetime
@@ -274,6 +282,7 @@ def cast_value(value, ctype):
 
             # if we are given a formula, then there is nothing to do:
             if value[0] == '=':
+                LOGGER.error(ERROR_DATETIME_FORMULA)
                 raise TypeError(ERROR_DATETIME_FORMULA)
             return string_to_datetime(value)
 
@@ -283,6 +292,7 @@ def cast_value(value, ctype):
 
         # in any other case raise an error, as this type is not known to be
         # casted into a datetime
+        LOGGER.error(ERROR_DATETIME_UNKNOWN)
         raise TypeError(ERROR_DATETIME_UNKNOWN)
 
     # -- date
@@ -298,6 +308,7 @@ def cast_value(value, ctype):
         # unless we are given a formula
         if isinstance(value, str):
             if value[0] == '=':
+                LOGGER.error(ERROR_DATETIME_FORMULA)
                 raise TypeError(ERROR_DATETIME_FORMULA)
             return string_to_date(value)
 
@@ -306,6 +317,7 @@ def cast_value(value, ctype):
             return datetime.date(value.year, value.month, value.day)
 
     # -- unknown!
+    LOGGER.error(ERROR_UNKNOWN_TYPE.format(ctype))
     raise TypeError(ERROR_UNKNOWN_TYPE.format(ctype))
 
 
@@ -610,8 +622,10 @@ class DynamicArray:
             if column < len(self._data[row-1]):
                 return self._data[row-1][column]
 
+            LOGGER.error(ERROR_KEY_NOT_FOUND)
             raise IndexError
 
+        LOGGER.error(ERROR_KEY_NOT_FOUND)
         raise IndexError
 
 
@@ -734,6 +748,7 @@ class SPSCellContent:
 
         # verify that the given type is known, and reject unknown types
         if ctype not in ['datetime', 'date', 'text', 'integer', 'real', 'formula']:
+            LOGGER.error(ERROR_UNKNOWN_CELL_TYPE.format(ctype))
             raise ValueError(ERROR_UNKNOWN_CELL_TYPE.format(ctype))
 
         # and copy now the attributes
@@ -851,6 +866,7 @@ class SPSCellReference:
             if self._descriptor in context:
                 self._cell = context[self._descriptor]
             else:
+                LOGGER.error(ERROR_DESCRIPTOR_NOT_FOUND.format(self._descriptor, context))
                 raise ValueError(ERROR_DESCRIPTOR_NOT_FOUND.format(self._descriptor, context))
 
         # now, once the location is known, apply the offset
@@ -1072,6 +1088,7 @@ class SPSQuery(SPSCommand):
         # 'text'. This same thing could be done in the parser, but it seems much
         # easier here
         if content.get_type() != 'text':
+            LOGGER.error(ERROR_QUERY_NOT_TEXT.format(self))
             raise TypeError(ERROR_QUERY_NOT_TEXT.format(self))
 
         # create an instance invoking the constructor of the base class
@@ -1133,6 +1150,7 @@ class SPSQuery(SPSCommand):
         # none can be found
         dbref = self._dbref if self._dbref else dbname
         if not dbref:
+            LOGGER.error(ERROR_DB_NOT_FOUND.format(self))
             raise ValueError(ERROR_DB_NOT_FOUND.format(self))
 
         # get a cursor to it
@@ -1371,6 +1389,7 @@ class SPSSpreadsheet:
             else:                                       # if both are given
                 value = external if override else internal      # use override to decide
             if msg and not value:                       # if no value was found and a msg is given
+                LOGGER.error(ERROR_FATAL_ERROR.format(msg, self._registry))
                 raise ValueError(ERROR_FATAL_ERROR.format(msg, self._registry))
 
             return value                                # and return the value computed so far
@@ -1390,7 +1409,7 @@ class SPSSpreadsheet:
         if not sheetnameref:
             sheetnameref = "Unnamed"
 
-        print(LITERAL_CREATING_SPREADSHEET.format(spsref, sheetnameref))
+        LOGGER.info(LITERAL_CREATING_SPREADSHEET.format(spsref, sheetnameref))
 
         # and now execute all commands in the current registry. The result is an
         # array of contents to insert into the spreadsheet
@@ -1569,6 +1588,7 @@ class SPSBook:
                         elif cell.get_type() == 'formula':
                             sheet.write_formula(norow, nocol, cell.get_data(), attrs)
                         else:
+                            LOGGER.error(ERROR_UNKNOWN_CELL_TYPE.format(cell.get_type()))
                             raise ValueError(ERROR_UNKNOWN_CELL_TYPE.format(cell.get_type()))
 
         # close the workbook
@@ -1616,6 +1636,7 @@ class SPSBook:
                 # if a sheet already exists in this spreadsheet with the same
                 # name
                 if list(sheet.keys())[0] in files[filename]:
+                    LOGGER.error(ERROR_DUP_NAME.format(filename, list(sheet.keys())[0]))
                     raise ValueError(ERROR_DUP_NAME.format(filename, list(sheet.keys())[0]))
 
                 # otherwise, add this sheet to this spreadsheet

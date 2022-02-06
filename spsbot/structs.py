@@ -22,9 +22,11 @@ Basic structures used both by databases and spreadsheets
 import math                             # pow
 import re                               # match
 
+from . import utils
 
 # globals
 # -----------------------------------------------------------------------------
+LOGGER = utils.LOGGER
 
 # -- errors
 ERROR_INVALID_COLUMN_ROW = "the cell '{0}' is not a legal representation of a cell"
@@ -46,6 +48,7 @@ def get_columnrow(cellname):
     # extract the column and the row from the given cell name
     match = re.match(r'(?P<column>[a-zA-Z]+)(?P<row>\d+)', cellname)
     if not match:
+        LOGGER.error(ERROR_INVALID_COLUMN_ROW.format(cellname))
         raise ValueError(ERROR_INVALID_COLUMN_ROW.format(cellname))
 
     # and make sure to cast the row to an integer
@@ -189,6 +192,7 @@ def add_rows(cellname, value):
 
     # verify you are not below the first row
     if row + value < 1:
+        LOGGER.error(ERROR_ROWS_OUT_OF_RANGE.format(cellname, value))
         raise ValueError(ERROR_ROWS_OUT_OF_RANGE.format(cellname, value))
 
     # return the name of a cell which is a given number of rows below
@@ -214,6 +218,7 @@ def add_columns(cellname, value):
 
     # verify you are not below the first column
     if get_columnindex(column) + value < 0:
+        LOGGER.error(ERROR_COLUMNS_OUT_OF_RANGE.format(cellname, value))
         raise ValueError(ERROR_COLUMNS_OUT_OF_RANGE.format(cellname, value))
 
     # return the name of a cell which is a given number of columns below
