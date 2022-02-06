@@ -387,12 +387,21 @@ class DBCellReference:
            2. If the descriptor defines a cell in implicit form then traverse
               the given sheet in the right direction to determine its location
 
-           Note that step 2 requires access to the spreadsheet as given in
-           sheet. In addition a base can be given for computing the exact
-           location of cells defined implicitly. If a base is given, the
-           location to look for should be *after* the given base
+           Note that:
+
+           1. Step 2 requires access to the spreadsheet as given in sheet.
+
+           2. The only implicit definition of cell references accepted by this
+              function is "by content" with the operator '[]', i.e., if this
+              cell reference contained other operators such as '.' or '*' these
+              should have been resolved before invoking this function.
+
+           In addition a base can be given for computing the exact location of
+           cells defined implicitly. If a base is given, the location to look
+           for should be *after* the given base
 
            This method entirely ignores the offset of this instance
+
         """
 
         # First things first, check whether the cell has been given explicitly
@@ -424,8 +433,7 @@ class DBCellReference:
         # if the cell was given in the format <colum>[content]
         if match.groups()[0] is not None and match.groups()[1] is not None:
 
-            # then the increment between adjacent cells should proceed by rows,
-            # and the content to match is given in
+            # then the increment between adjacent cells should proceed by rows
             column, delta, content = match.groups()[0], (0, 1), match.groups()[1]
 
         elif match.groups()[2] is not None and match.groups()[3] is not None:
@@ -451,7 +459,7 @@ class DBCellReference:
         # so just locate at the given row and column and proceed applying the
         # given delta until a cell is found with the specified contents. current
         # is the cell examined at each iteration
-        while sheet[current] != content:
+        while str(sheet[current]) != str(content):
 
             # move to the next cell
             current = structs.add_columns(structs.add_rows(current, delta[1]), delta[0])
