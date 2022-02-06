@@ -358,13 +358,13 @@ class SPSParser:
                     | COLON'''
 
         if len(p) == 4:
-            p[0] = (p[1][1:-1], p[3][1:-1])
+            p[0] = (utils.get_full_path(p[1][1:-1]), p[3][1:-1])
         if len(p) == 3:
 
             if p[1] == self.t_COLON:
                 p[0] = (None, p[2][1:-1])
             else:
-                p[0] = (p[1][1:-1], None)
+                p[0] = (utils.get_full_path(p[1][1:-1]), None)
         if len(p) == 2:
             p[0] = (None, None)
 

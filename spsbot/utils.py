@@ -37,13 +37,13 @@ LOG_COLOR_PREFIX = {
     "CRITICAL" : colors.insert_prefix(foreground="#ff0000", bold=True)
 }
 
+#
 
 # functions
 # -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 # get_basename
-#
 # return the basename of a file, i.e., the whole string but the contents after
 # the *last* dot
 # -----------------------------------------------------------------------------
@@ -66,13 +66,51 @@ def get_basename(filename: str):
 
 
 # -----------------------------------------------------------------------------
+# get_full_path
+#
+# return the absolute path of the path given in its argument which is expected
+# to be a relative path which might use ~. This function does not implement any
+# error checking. If the given string is badly-formed the results are undefined
+# -----------------------------------------------------------------------------
+def get_full_path(pathname: str):
+    """return the absolute path of the path given in its argument which is expected
+       to be a relative path which might use ~. This function does not implement
+       any # error checking. If the given string is badly-formed the results are
+       undefined
+
+    """
+
+    # remove unnecessary blanks
+    pathname = pathname.strip()
+
+    # in case the pathname is an absolute path. 'abspath' is used again to
+    # ensure that the same convention is used regarding the inclusion of the
+    # trailing os separator '/
+    if os.path.isabs(pathname):
+        return os.path.abspath(pathname)
+
+    # in case this is a path starting with the $home. In this case, the first
+    # component should be strictly equal to ~
+    if pathname[0] == "~":
+
+        # split the whole pathname into its components
+        components = pathname.split(os.sep)
+
+        # join all components again after expanding the first one
+        pathname = os.path.join(os.path.expanduser("~"), *components[1:])
+
+    # otherwise, this is assumed to be a relative path name so that return its
+    # absolute path
+    return os.path.abspath(pathname)
+
+# -----------------------------------------------------------------------------
 # get_filename
 #
 # return the right name of a file. If the given filename already finishes with
 # the given suffix, then it is readily used; otherwise, the given suffix is
 # added
 # -----------------------------------------------------------------------------
-def get_filename(filename, suffix):
+def get_filename(filename: str, suffix: str):
     """return the right name of a file. If the given filename already finishes with
        the given suffix, then it is readily used; otherwise, the given suffix is
        added
@@ -152,7 +190,6 @@ class LoggerContextFilter(logging.Filter):
 
 # default logger
 LOGGER = setup_logger()
-
 
 
 # Local Variables:

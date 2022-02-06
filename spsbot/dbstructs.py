@@ -1432,6 +1432,10 @@ class DBTable:
            spreadsheet and sheetname ---and if no sheetname is given, then from
            the first one found by default.
 
+           The spreadsheet can be given with either an absolute path or a
+           relative path. It is also allowed to use the wildcard ~ which is
+           conveniently substituted by $HOME
+
         '''
 
         # copy the attributes

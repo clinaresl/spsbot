@@ -279,11 +279,11 @@ class DBParser:
         elif len(p) == 7:
 
             # remove the double quotes in the spreadsheet name
-            p[0] = dbstructs.DBTable(p[1], p[3][1:-1], None, p[5])
+            p[0] = dbstructs.DBTable(p[1], utils.get_full_path(p[3][1:-1]), None, p[5])
         else:
 
             # remove the double quotes in the spreadsheet name and the sheetname
-            p[0] = dbstructs.DBTable(p[1], p[3][1:-1], p[5][1:-1], p[7])
+            p[0] = dbstructs.DBTable(p[1], utils.get_full_path(p[3][1:-1]), p[5][1:-1], p[7])
 
 
     # a block consists of a collection of columns along with modifiers. Mote
